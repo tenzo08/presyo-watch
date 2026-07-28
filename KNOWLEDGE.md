@@ -17,6 +17,14 @@ Last verified: 2026-07-28
   CPI, inflation, and regional index data.
 - Related portals: PSA Data Archive (`psada.psa.gov.ph`) for microdata (request-gated),
   `mapstat-psa.opendata.arcgis.com` for geospatial.
+- `robots.txt` verified 2026-07-28. Cloudflare-managed, and worth reading carefully:
+  `User-agent: *` gets `Allow: /`, but a list of named AI crawlers — `GPTBot`,
+  `ClaudeBot`, `CCBot`, `Google-Extended`, `Bytespider`, `Amazonbot` and others — get
+  `Disallow: /`. PresyoWatch is none of them and matches `*`, so it is permitted. The
+  file also carries `Content-Signal: search=yes,ai-train=no,use=reference`, an express
+  reservation of rights against AI training. This project stores and republishes the data
+  with attribution and does not train models on it, which is consistent with that signal.
+  Captured at `tests/fixtures/robots/openstat.psa.gov.ph.robots.txt`.
 
 ### Department of Agriculture — national portal
 - Index page: `https://www.da.gov.ph/price-monitoring/` — **fetches fine**.
@@ -24,14 +32,35 @@ Last verified: 2026-07-28
   - Daily Price Index — one PDF per day, current through at least 2026-07-25
   - Weekly Average Prices — one PDF per week, back to August 2023
   - Daily Cigarette Price Monitoring — one PDF per day
-- **`www.da.gov.ph` disallows automated access to `/wp-content/uploads/`.** A direct fetch
-  of a Daily Price Index PDF returns a robots disallow. The HTML index page is fine.
-  → Treat national PDFs as **manual download only**. Do not automate. Do not route around.
+- **`www.da.gov.ph` disallows *every* PDF on the host — not just `/wp-content/uploads/`.**
+  Corrected 2026-07-28 by fetching `robots.txt` directly. The whole file is:
+
+  ```
+  User-agent: *
+  Disallow: /wp-admin/
+  Disallow: /*.pdf$
+  Disallow: /author/
+  ```
+
+  The operative rule is `Disallow: /*.pdf$`, which matches any URL ending in `.pdf`
+  anywhere on the host. An earlier version of this file described the disallow as being
+  on `/wp-content/uploads/`; that was **wrong and too narrow** — a crawler checking only
+  that prefix would wrongly fetch a PDF served from any other path.
+  → Conclusion unchanged and now broader: national PDFs are **manual download only,
+  wherever they live**. The HTML index page (`/price-monitoring/`) is allowed.
+  → Served with **CRLF** line endings. Captured byte-exact at
+  `tests/fixtures/robots/www.da.gov.ph.robots.txt`.
 
 ### Department of Agriculture — regional subdomains, AUTOMATABLE
 - `caraga.da.gov.ph`, `cagayanvalley.da.gov.ph`, `rfo7.da.gov.ph`,
   `cagayandeoro.da.gov.ph`, `easternvisayas.da.gov.ph`, and others.
-- Caraga serves PDFs without a robots disallow — verified by direct fetch.
+- Caraga serves PDFs without a robots disallow — re-verified 2026-07-28. Its entire
+  `robots.txt` is `Disallow: /wp-admin/` plus an `Allow` for `admin-ajax.php`. No
+  `Crawl-delay`. Captured at `tests/fixtures/robots/caraga.da.gov.ph.robots.txt`.
+- **Caraga is slow: roughly 8 seconds per request** for its home page (measured
+  2026-07-28). This matters more than it looks — `httpx`'s default timeout is 5 seconds,
+  so a client using library defaults fails against this host every time. Always set the
+  timeout explicitly; `HttpConfig.timeout` defaults to 30s for this reason.
 - **Check `robots.txt` for each regional host before adding it as a source.** Record the
   result and the check date in the `sources` table.
 - Caraga uses a highly predictable directory layout:
@@ -88,6 +117,38 @@ Use `pdfplumber`. **No OCR required.** Do not add tesseract to the stack.
   pollute a "food prices" chart.
 
 ---
+
+## `urllib.robotparser` fails open on the DA's rules — do not use it
+
+Verified 2026-07-28 against the real `www.da.gov.ph` file.
+
+Python's standard-library parser matches a rule by **literal prefix only**:
+`RuleLine.applies_to` reduces to `path.startswith(rule)`. It understands neither a `*`
+inside a pattern nor a `$` end-anchor. Given the real `Disallow: /*.pdf$`:
+
+| URL | `urllib.robotparser` | `protego` | Correct |
+|---|---|---|---|
+| `/wp-content/uploads/2026/07/Daily-Price-Index-July-24-2026.pdf` | **allowed** | disallowed | disallowed |
+| `/price-monitoring/` | allowed | allowed | allowed |
+| `/wp-admin/` | disallowed | disallowed | disallowed |
+
+The stdlib parser grants permission to fetch precisely the files this project must not
+fetch. It fails in the permissive direction, which is the unacceptable one.
+
+**Therefore:** robots parsing uses `protego` (the parser Scrapy uses), which implements
+the RFC 9309 matching rules including wildcards, end-anchors, and longest-match
+precedence. This is a correctness requirement, not a preference.
+
+## Unreachable robots.txt means disallow everything
+
+RFC 9309 §§ 2.3.1.3–2.3.1.4 draws a distinction that intuition gets backwards:
+
+- **`4xx`** — robots.txt is *unavailable*. No rules exist, so everything is allowed.
+- **`5xx`, `429`, timeouts, connection failures** — robots.txt is *unreachable*. The
+  rules exist but could not be read, so a crawler **must assume complete disallow**.
+
+Getting this backwards means a flaky government server silently licenses us to ignore
+rules we merely failed to read. Implemented in `net/robots.py` and pinned by tests.
 
 ## URL naming is inconsistent — never build URLs from patterns
 

@@ -13,5 +13,10 @@
 *.jpg binary
 *.zip binary
 
+# Fixtures are captured evidence, not source code. They must stay byte-identical to
+# what the source served — including CRLF line endings, which www.da.gov.ph really
+# uses in its robots.txt. Any normalization would make the committed bytes a lie.
+tests/fixtures/** -text
+
 # Lockfile is generated; keep it out of diff review noise.
 uv.lock linguist-generated=true

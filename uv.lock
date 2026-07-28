@@ -869,6 +869,7 @@ dependencies = [
     { name = "alembic" },
     { name = "httpx" },
     { name = "pdfplumber" },
+    { name = "protego" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -890,6 +891,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.14" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "pdfplumber", specifier = ">=0.11.4" },
+    { name = "protego", specifier = ">=0.6.2" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "pydantic", specifier = ">=2.9" },
     { name = "pydantic-settings", specifier = ">=2.6" },
@@ -904,6 +906,15 @@ dev = [
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-cov", specifier = ">=6.0" },
     { name = "ruff", specifier = ">=0.8" },
+]
+
+[[package]]
+name = "protego"
+version = "0.6.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/7d/1b/6b0ee60bb1561843bfc62f5c7c3cb1ef6147b47e829a5fd6b7fcd2752471/protego-0.6.2.tar.gz", hash = "sha256:88ff004544ce44e61269cc6f8735f7837d12e09bb77619fc94fbb26b72e5d137", size = 3137854, upload-time = "2026-06-25T09:33:16.361Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/61/10/cbd3c06603bb8b3e0e871df24ee793a6e3b53d8c4cc8763f1b8b936649aa/protego-0.6.2-py3-none-any.whl", hash = "sha256:714de21d82527c9be900066c3211b266985dd6a19b6e70c57e033fc1a589f3ff", size = 10296, upload-time = "2026-06-25T09:33:14.771Z" },
 ]
 
 [[package]]

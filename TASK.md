@@ -12,11 +12,11 @@ localhost one.
 
 - [x] Repo scaffold: `src/`, `tests/`, `pyproject.toml`, ruff + mypy config, pre-commit
 - [x] `.env.example` with placeholders; real `.env` gitignored
-- [ ] `robots.txt` checker utility — fetches and parses per host, caches result, refuses
+- [x] `robots.txt` checker utility — fetches and parses per host, caches result, refuses
       to fetch disallowed paths. Wire it into the HTTP client so it cannot be bypassed.
 - [ ] Content-addressed raw file cache (SHA-256 keyed), with a `fetch_once()` wrapper
       that returns cached bytes if the file has been seen
-- [ ] HTTP client: descriptive User-Agent + contact email, 1 req/sec/host limit,
+- [x] HTTP client: descriptive User-Agent + contact email, 1 req/sec/host limit,
       exponential backoff with jitter, explicit timeout
 - [ ] Postgres schema + migrations (Alembic) per PLANNING.md
 - [ ] Index scraper for one regional DA source: extract anchor hrefs, tolerant date
@@ -77,3 +77,22 @@ localhost one.
 ## Discovered during work
 
 _(append new tasks here as they surface — do not silently expand scope in other phases)_
+
+- [x] **Added `protego` as a dependency.** `urllib.robotparser` matches rules by literal
+      prefix and cannot handle `Disallow: /*.pdf$`, which is what `www.da.gov.ph` actually
+      publishes — it returned *allowed* for a DA price-index PDF. See KNOWLEDGE.md
+      § "`urllib.robotparser` fails open".
+- [x] **Corrected KNOWLEDGE.md on the DA disallow.** The rule is `/*.pdf$` (all PDFs on
+      the host), not `/wp-content/uploads/`. Conclusion unchanged but broader.
+- [x] **`.gitattributes`** — force LF, mark PDF/XLSX binary, and keep `tests/fixtures/**`
+      byte-exact. Fixture hashes are load-bearing for the content-addressed cache, and
+      `www.da.gov.ph` serves CRLF.
+- [ ] **Record `robots_checked_at` and the robots verdict per source** when the `sources`
+      table lands. `HttpClient.robots_decision()` already returns everything needed;
+      nothing persists it yet.
+- [ ] **Decide what the ingester does with a source that requests a large `Crawl-delay`.**
+      The client honours it in full and logs `large_crawl_delay_requested`; no caller acts
+      on that yet, so a source asking for 300s would silently make a run very long.
+- [ ] **Optional: a network-marked integration test** for the live hosts. Verified manually
+      on 2026-07-28 (DA PDF refused, Caraga fetched, rate limiter observed); not automated,
+      because CI should not depend on a government server being up.

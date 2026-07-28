@@ -7,6 +7,10 @@
 default_language_version:
   python: python3.12
 
+# Fixtures are byte-exact captures of what a source actually served. Whitespace and
+# line-ending "fixes" would corrupt them and invalidate their SHA-256 hashes.
+exclude: ^tests/fixtures/
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0

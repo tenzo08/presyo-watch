@@ -18,6 +18,7 @@ dependencies = [
     "sqlalchemy>=2.0.36",
     "alembic>=1.14",
     "psycopg[binary]>=3.2",
+    "protego>=0.6.2",
 ]
 
 [project.urls]
@@ -88,11 +89,21 @@ select = [
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
 
+[tool.ruff.lint.flake8-type-checking]
+# Pydantic and dataclasses resolve annotations at runtime. Without these, the TC rules
+# would move their imports into `TYPE_CHECKING` blocks and break model construction.
+runtime-evaluated-base-classes = [
+    "pydantic.BaseModel",
+    "pydantic_settings.BaseSettings",
+]
+runtime-evaluated-decorators = ["dataclasses.dataclass"]
+
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = [
     "S101",    # assert is the point of a test
     "PLR2004", # magic values are fine in assertions
     "ARG",     # fixtures are injected and often unused by name
+    "PLR0913", # test builders legitimately take a knob per scenario
 ]
 
 [tool.ruff.lint.pydocstyle]
