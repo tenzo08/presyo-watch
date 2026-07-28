@@ -14,17 +14,18 @@ so page 2 can repeat a row from page 1 and skip another entirely — a paging bu
 appears on real data.
 """
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import Select, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from presyowatch.api.deps import get_session
 from presyowatch.api.schemas import (
     CommodityOut,
     MarketOut,
+    MoverOut,
     ObservationOut,
     Page,
     RegionOut,
@@ -286,5 +287,144 @@ def list_observations(
             ingested_at=observation.ingested_at,
         )
         for observation, slug, market_row, source_slug in rows
+    ]
+    return Page(items=items, total=total, limit=limit, offset=offset)
+
+
+MAX_WINDOW_DAYS = 365
+DEFAULT_WINDOW_DAYS = 7
+MIN_OBSERVATIONS_FOR_A_MOVE = 2
+
+
+@router.get("/movers", response_model=Page[MoverOut], tags=["prices"])
+def list_movers(
+    session: Annotated[Session, Depends(get_session)],
+    window_days: Annotated[
+        int, Query(ge=1, le=MAX_WINDOW_DAYS, description="Length of the comparison window.")
+    ] = DEFAULT_WINDOW_DAYS,
+    as_of: Annotated[
+        date | None, Query(description="End of the window. Defaults to the latest data.")
+    ] = None,
+    region: Annotated[str | None, Query(description="PSGC code.")] = None,
+    include_agricultural_inputs: Annotated[
+        bool, Query(description="Include feeds, fertiliser and pesticides.")
+    ] = False,
+    limit: Limit = 20,
+    offset: Offset = 0,
+) -> Page[MoverOut]:
+    """Commodities whose price moved most, largest absolute percentage first.
+
+    ``as_of`` defaults to the latest date in the data rather than to today. A run can be
+    late, or a source can skip a day, and anchoring on the wall clock would quietly return an
+    empty table on any morning the ingester had not finished yet — which reads as "nothing
+    moved" rather than "nothing is loaded".
+
+    Farm inputs are excluded by default here, unlike on ``/commodities``. A "biggest movers"
+    table is read as a story about food, and fertiliser priced by the sack swamps it.
+    """
+    anchor = as_of or session.scalar(select(func.max(PriceObservation.observed_on)))
+    if anchor is None:
+        return Page(items=[], total=0, limit=limit, offset=offset)
+    start = anchor - timedelta(days=window_days)
+
+    window = (
+        select(
+            PriceObservation.commodity_id.label("commodity_id"),
+            PriceObservation.market_id.label("market_id"),
+            PriceObservation.observed_on.label("observed_on"),
+            PriceObservation.average.label("average"),
+            func.row_number()
+            .over(
+                partition_by=(PriceObservation.commodity_id, PriceObservation.market_id),
+                order_by=PriceObservation.observed_on.asc(),
+            )
+            .label("from_start"),
+            func.row_number()
+            .over(
+                partition_by=(PriceObservation.commodity_id, PriceObservation.market_id),
+                order_by=PriceObservation.observed_on.desc(),
+            )
+            .label("from_end"),
+            func.count()
+            .over(partition_by=(PriceObservation.commodity_id, PriceObservation.market_id))
+            .label("observations"),
+        )
+        # A null average carries no comparison, and a zero would make the percentage
+        # infinite. Blanks are stored as NULL rather than 0 precisely so this stays simple.
+        .where(PriceObservation.average.is_not(None))
+        .where(PriceObservation.average > 0)
+        .where(PriceObservation.observed_on > start)
+        .where(PriceObservation.observed_on <= anchor)
+        .subquery()
+    )
+
+    earliest = aliased(window, name="earliest")
+    latest = aliased(window, name="latest")
+    change = latest.c.average - earliest.c.average
+    percent = change * 100 / earliest.c.average
+
+    statement = (
+        select(
+            Commodity,
+            Market,
+            earliest.c.observed_on,
+            latest.c.observed_on,
+            earliest.c.average,
+            latest.c.average,
+            change,
+            percent,
+            latest.c.observations,
+        )
+        .select_from(earliest)
+        .join(
+            latest,
+            (latest.c.commodity_id == earliest.c.commodity_id)
+            & (latest.c.market_id == earliest.c.market_id),
+        )
+        .join(Commodity, Commodity.id == earliest.c.commodity_id)
+        .join(Market, Market.id == earliest.c.market_id)
+        .where(earliest.c.from_start == 1)
+        .where(latest.c.from_end == 1)
+        # One figure in the window is not a movement, it is a single price.
+        .where(latest.c.observations >= MIN_OBSERVATIONS_FOR_A_MOVE)
+        # Commodity and market last, so paging is stable when two rows moved identically.
+        .order_by(func.abs(percent).desc(), Commodity.id, Market.id)
+    )
+    if region is not None:
+        statement = statement.where(Market.region_psgc_code == region)
+    if not include_agricultural_inputs:
+        statement = statement.where(Commodity.group.notin_(_INPUT_GROUPS))
+
+    total = _count(session, statement)
+    rows = session.execute(statement.limit(limit).offset(offset)).all()
+    items = [
+        MoverOut(
+            commodity_slug=commodity.canonical_slug,
+            commodity=commodity.name,
+            group=commodity.group,
+            unit=commodity.unit,
+            market_id=market_row.id,
+            market=market_row.name,
+            municipality=market_row.municipality,
+            region_psgc_code=market_row.region_psgc_code,
+            first_observed_on=first_on,
+            last_observed_on=last_on,
+            first_average=first_average,
+            last_average=last_average,
+            change=amount,
+            percent_change=float(share),
+            observations=count,
+        )
+        for (
+            commodity,
+            market_row,
+            first_on,
+            last_on,
+            first_average,
+            last_average,
+            amount,
+            share,
+            count,
+        ) in rows
     ]
     return Page(items=items, total=total, limit=limit, offset=offset)

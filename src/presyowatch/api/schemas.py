@@ -212,3 +212,37 @@ class Health(BaseModel):
     status: str
     database: str
     version: str
+
+
+class MoverOut(BaseModel):
+    """How far one commodity's price moved at one market over a window.
+
+    **Per market, not averaged across markets.** Averaging the averages of Butuan and Tandag
+    would produce a number that is nobody's price and that moves when coverage changes rather
+    than when prices do — a market dropping out of monitoring would look like a price swing.
+    Each row here is a real comparison between two figures the source actually published.
+
+    ``first`` and ``last`` are the earliest and latest observations *inside the window*, not
+    the window's endpoints: the source does not publish every day, and pretending a gap is a
+    price would be interpolation by another name. The dates are returned so a reader can see
+    what was actually compared.
+    """
+
+    commodity_slug: str
+    commodity: str
+    group: str
+    unit: str
+    market_id: int
+    market: str
+    municipality: str
+    region_psgc_code: str
+
+    first_observed_on: date
+    last_observed_on: date
+    first_average: Money
+    last_average: Money
+    change: Money
+    percent_change: float
+    observations: int = Field(
+        description="How many days inside the window carried a figure. Two is the minimum."
+    )

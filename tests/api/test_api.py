@@ -325,3 +325,121 @@ def test_the_documented_examples_are_valid_instances(model: type[BaseModel]) -> 
     for example in examples:
         assert isinstance(example, dict)
         model.model_validate(example)
+
+
+# -- biggest movers ---------------------------------------------------------------
+
+
+@pytest.fixture
+def movement(session: Session, data: dict[str, int]) -> int:
+    """A second commodity that falls while the first one holds steady."""
+    other = session.scalar(
+        select(Commodity.id).where(Commodity.id != data["commodity_id"]).order_by(Commodity.id)
+    )
+    assert other is not None
+    session.add_all(
+        [
+            PriceObservation(
+                source_id=data["source_id"],
+                market_id=data["market_id"],
+                commodity_id=other,
+                observed_on=day,
+                average=average,
+                revision_no=0,
+                source_file_sha256="c" * 64,
+            )
+            for day, average in (
+                (date(2026, 7, 26), Decimal("100.00")),
+                (date(2026, 7, 28), Decimal("75.00")),
+            )
+        ]
+    )
+    session.commit()
+    return other
+
+
+def test_a_mover_reports_what_it_actually_compared(client: TestClient, movement: int) -> None:
+    """The dates are returned because the source does not publish every day.
+
+    A window of "7 days" compared here is really "the first and last figures inside those 7
+    days", and pretending otherwise would be interpolation with extra steps.
+    """
+    body = client.get("/movers", params={"window_days": 7}).json()
+
+    top = body["items"][0]
+    assert top["first_observed_on"] == "2026-07-26"
+    assert top["last_observed_on"] == "2026-07-28"
+    assert top["first_average"] == "100.00"
+    assert top["last_average"] == "75.00"
+    assert top["change"] == "-25.00"
+    assert top["percent_change"] == pytest.approx(-25.0)
+    assert top["observations"] == 2
+
+
+def test_movers_are_ordered_by_the_size_of_the_move_either_way(
+    client: TestClient, movement: int
+) -> None:
+    """A 25% fall is a bigger story than a 1% rise, and both are stories."""
+    items = client.get("/movers", params={"window_days": 7}).json()["items"]
+
+    magnitudes = [abs(item["percent_change"]) for item in items]
+    assert magnitudes == sorted(magnitudes, reverse=True)
+    assert items[0]["percent_change"] < 0
+
+
+def test_a_commodity_that_did_not_move_is_still_a_row(client: TestClient, movement: int) -> None:
+    """Zero is a real answer. The steady one has three identical observations."""
+    items = client.get("/movers", params={"window_days": 7}).json()["items"]
+
+    steady = [item for item in items if item["percent_change"] == 0]
+    assert steady
+    assert steady[0]["observations"] == 3
+
+
+def test_one_observation_in_the_window_is_not_a_movement(
+    client: TestClient, session: Session, data: dict[str, int]
+) -> None:
+    """A single price is a price, not a change. Reporting it as 0% would be a claim."""
+    body = client.get("/movers", params={"window_days": 1}).json()
+
+    assert body["total"] == 0
+
+
+def test_the_window_anchors_on_the_latest_data_not_the_wall_clock(
+    client: TestClient, movement: int
+) -> None:
+    """A late ingestion run must not make the table read "nothing moved"."""
+    body = client.get("/movers", params={"window_days": 7}).json()
+
+    assert body["total"] > 0
+    assert body["items"][0]["last_observed_on"] == "2026-07-28"
+
+
+def test_an_explicit_as_of_narrows_the_window(client: TestClient, movement: int) -> None:
+    body = client.get("/movers", params={"window_days": 7, "as_of": "2026-07-27"}).json()
+
+    assert all(item["last_observed_on"] <= "2026-07-27" for item in body["items"])
+
+
+def test_farm_inputs_are_excluded_from_movers_by_default(client: TestClient, movement: int) -> None:
+    """A "biggest movers" table reads as a story about food."""
+    default = client.get("/movers", params={"window_days": 7}).json()
+
+    assert not any(item["group"] in {"FERTILIZER", "INSECTICIDE"} for item in default["items"])
+
+
+def test_movers_on_an_empty_database_is_empty_not_an_error(client: TestClient) -> None:
+    """Before the first ingestion run there is nothing to compare, which is not a fault."""
+    body = client.get("/movers").json()
+
+    assert body == {"items": [], "total": 0, "limit": 20, "offset": 0}
+
+
+def test_movers_names_the_market_rather_than_averaging_across_them(
+    client: TestClient, movement: int
+) -> None:
+    """Averaging Butuan and Tandag would produce a number that is nobody's price."""
+    top = client.get("/movers", params={"window_days": 7}).json()["items"][0]
+
+    assert top["market"] == "Luha Public Market"
+    assert top["municipality"] == "Tandag City"
