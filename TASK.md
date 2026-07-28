@@ -200,3 +200,8 @@ _(append new tasks here as they surface — do not silently expand scope in othe
 - [ ] **Nothing reprocesses quarantine.** Rows are written with enough raw payload to be
       replayed after a parser or alias fix, which was the point, but there is no command that
       replays them. Roughly 240 rows per run currently sit there awaiting curation.
+- [ ] **Quarantine re-records the same undatable links on every run.** The 81 year-less
+      Caraga hrefs are quarantined afresh each time the index is read, so the table grows by
+      about 84 rows a day for a fixed, known problem. Either key index-stage quarantine on
+      `(source_id, source_url)` and upsert it, or record a `last_seen_at` instead of a new
+      row. Worth settling before the data quality page counts these (Phase 4).

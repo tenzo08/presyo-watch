@@ -574,3 +574,46 @@ def test_the_exit_code_distinguishes_partial_from_both_others(status: str, expec
 
     assert codes[status] == expected
     assert len(set(codes.values())) == 3
+
+
+def test_files_outside_the_window_are_skipped_not_quarantined(
+    session_factory: sessionmaker[Session],
+    session: Session,
+    clientfactory: Callable[..., HttpClient],
+    raw_cache: RawCache,
+    reference: None,
+    real_index: str,
+) -> None:
+    """A file from last month is not a failure, and must not be counted as one.
+
+    Caraga lists 451 datable files. Handing the lookback bound to the scraper put every one
+    of them outside the window into `scrape.rejected`, and quarantining that wholesale wrote
+    about 440 rows per run for files whose only sin was being old — inflating a public data
+    quality figure with non-problems, every day, for ever.
+    """
+    served = {LUHA_JULY_28, SAN_JOSE_JULY_28, MISLABELLED_2029}
+    outcome = run(session_factory, clientfactory(real_index, serve=served), raw_cache)
+
+    index_stage = quarantine(session, "index")
+    assert outcome.files_seen == 3
+    assert not any("is before" in row.reason for row in index_stage)
+    # What remains is the real thing: hrefs with no readable date anywhere.
+    assert index_stage
+    assert all("no date in link text" in row.reason for row in index_stage)
+
+
+def test_an_undatable_link_is_still_quarantined(
+    session_factory: sessionmaker[Session],
+    session: Session,
+    clientfactory: Callable[..., HttpClient],
+    raw_cache: RawCache,
+    reference: None,
+    real_index: str,
+) -> None:
+    """81 of Caraga's links carry no year anywhere. Those are a real, recorded loss."""
+    run(session_factory, clientfactory(real_index, serve={LUHA_JULY_28}), raw_cache)
+
+    undatable = quarantine(session, "index")
+    assert len(undatable) > 50
+    assert all(row.source_url for row in undatable)
+    assert all(row.payload["href"] for row in undatable)

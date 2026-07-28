@@ -319,14 +319,24 @@ def _discover(
 ) -> list[IndexEntry]:
     """Read the index and return the entries to process, oldest first.
 
-    No ``not_after`` bound is applied. Caraga's index really does carry a file dated 2029
-    whose sheet says 2026, and rejecting it on the filename would discard a valid sheet
+    **The lookback window is applied here, not by the scraper.** ``scrape_index`` takes date
+    bounds, but everything it rejects lands in ``scrape.rejected``, and quarantining that
+    wholesale conflates two completely different things: a link nobody can read, and a
+    perfectly good file from last month. Caraga lists 451 datable files, so a 14-day run was
+    writing about 440 quarantine rows per run for files whose only sin was being outside the
+    window — inflating a public data quality figure with non-problems, every single day.
+
+    Only genuinely unreadable candidates are quarantined. Out-of-window entries are simply
+    not this run's business.
+
+    No ``not_after`` bound is applied at all. Caraga's index really does carry a file dated
+    2029 whose sheet says 2026, and rejecting it on the filename would discard a valid sheet
     (KNOWLEDGE.md). The index date decides *what to fetch*; the date printed on the sheet is
     the one stored, and a future date is caught after parsing, where it can be judged on the
     authoritative value.
     """
     html = fetch_index(client, spec)
-    scrape = scrape_index(html, page_url=spec.index_url, spec=spec, not_before=not_before)
+    scrape = scrape_index(html, page_url=spec.index_url, spec=spec)
 
     with session_scope(session_factory) as session:
         tally.hold(
@@ -337,7 +347,8 @@ def _discover(
 
     # Stable within a date: `sorted` keeps the index's own order for equal keys, so a
     # correction listed after the sheet it corrects is applied after it.
-    return sorted(scrape.entries, key=lambda entry: entry.observed_on)
+    in_window = [entry for entry in scrape.entries if entry.observed_on >= not_before]
+    return sorted(in_window, key=lambda entry: entry.observed_on)
 
 
 def _process_entry(
