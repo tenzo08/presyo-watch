@@ -4,8 +4,37 @@ A free, public data platform that ingests Philippine agricultural and commodity 
 data daily, stores it as a time series, serves it through an API, and presents it as a
 dashboard with anomaly detection and forecasting.
 
-> **Status: scaffold only.** No ingestion, API, or dashboard yet. See
-> [`TASK.md`](TASK.md) for the build order and what is actually done.
+> **Status: ingestion works end to end; no API or dashboard yet.** A run scrapes a regional
+> DA index, fetches each sheet at most once ever, parses it, and upserts observations
+> idempotently. Not yet deployed or scheduled — that is Phase 2. See [`TASK.md`](TASK.md)
+> for the build order and what is actually done.
+
+## Running the ingester
+
+```bash
+python -m presyowatch seed        # load the committed reference data (idempotent)
+python -m presyowatch backfill    # reconcile the last 14 days for the Caraga source
+```
+
+`backfill --lookback-days N` changes the window. Exit codes are `0` succeeded, `1` failed,
+`2` partial — some files landed and some were quarantined. "Mostly worked" is a real
+outcome and a scheduler should be able to see it.
+
+Every run writes an `ingestion_runs` row, including when it fails, so a missed or broken run
+is visible rather than absent. Anything that cannot be stored — a dead link, an unreadable
+sheet, a commodity name with no alias — goes to the `quarantine` table with its reason and
+enough of the raw payload to be reprocessed later. Nothing is dropped silently.
+
+### What it will not do
+
+- **Fetch a file twice.** Source bytes are cached permanently, addressed by SHA-256. A
+  parser fix is applied by reparsing the cache, never by re-downloading history from a
+  government server.
+- **Guess a commodity.** Names are resolved by exact lookup against an explicit alias table.
+  About 87% of parsed rows resolve today; the rest quarantine until a human maps them,
+  because the heuristic that would merge `Well-Milled` into `Well Milled` would also merge
+  feed-grade corn grits into food-grade.
+- **Route around `robots.txt`.** A disallow ends the run rather than being worked around.
 
 ## Development
 
@@ -40,6 +69,20 @@ uv run --with pgserver python scripts/with_temp_postgres.py \
 `alembic check` is the important one: it fails if the models and the migration disagree.
 The schema tests build their database by *running the migration* rather than by
 `metadata.create_all`, so they assert against the schema that actually ships.
+
+### Fixtures
+
+`tests/fixtures/pdf/` holds thirteen real monitoring sheets fetched from `caraga.da.gov.ph`
+and committed byte-exact, plus the index page they were listed on. They were chosen for
+what is wrong with them: a collapsed table row, two filenames that disagree with the date
+printed inside the sheet, header labels the source truncated mid-word, a header block that
+extracts one line per row, a doubled `.xlsx.pdf` extension, one sheet published twice under
+two URLs, and one with seven columns that the parser refuses outright.
+
+That last group matters more than the coverage does. Widening this corpus from four sheets
+to twelve found two real parser bugs that had been filing commodities under the wrong groups
+— caught by a cross-sheet agreement check rather than by anything anyone thought to assert.
+Fixtures are real files, including the malformed ones, for exactly this reason.
 
 ## Documentation
 

@@ -154,6 +154,100 @@ legitimate cross-group names are the seven rice varieties — `Premium`, `Basmat
 appear under both `IMPORTED` and `LOCAL COMMERCIAL RICE`. **A commodity's identity therefore
 needs its group, not just its name.**
 
+### The header block is not always a single cell, and that broke two things
+
+Verified 2026-07-28 on `Mayor-Salvador-Calo-July-23-2026.xlsx.pdf` (five pages).
+
+Most sheets extract their metadata block as one tall cell that never reaches the table body.
+This one repeats the block on **every page** and extracts it **one line per row**, split
+across the first two columns:
+
+```
+['Province', ': Agusan Del Norte', '', '', '', '', '', '']
+['Municipality/City', ': Butuan City', '', '', '', '', '', '']
+```
+
+That is indistinguishable from a commodity row carrying a group heading, and treating it as
+one caused two unrelated failures on the same sheet:
+
+- `Province` became a commodity group, and the seven highland vegetables whose real heading
+  is drawn overleaf were filed under it;
+- those rows counted as the *first data row of their page*, which cost
+  `Cooking Oil (Coconut)` its page-opening status and moved it out of
+  `OTHER BASIC COMMODITIES` into `LIVESTOCK & POULTRY FEEDS`.
+
+**Therefore:** a row whose first column names a header field is metadata, not data, and is
+skipped rather than rejected. And an empty group cell only means "a page break split this
+heading" **on a commodity row** — the header block's blank rows have one too.
+
+Neither bug was visible on the original four fixtures. Both were found by the cross-sheet
+agreement check when the corpus grew to twelve, which is the strongest argument in this file
+for keeping real, awkward fixtures rather than convenient ones.
+
+### The source truncates its own header labels
+
+Verified 2026-07-28 on `Libertad-Public-Market-July-22-2026.pdf`:
+
+```
+Province : Agusan Del Norte
+Municipality/Ci: Butuan City
+Market Monitor: Libertad Public Market
+Date of Monitor: July 22, 2026
+```
+
+The spreadsheet column was too narrow and the export clipped the **label**, not the value.
+The data is complete and unambiguous. Header labels are therefore matched by prefix, with a
+six-character minimum and ambiguity refused rather than resolved by order.
+
+### One real sheet has seven columns, and is quarantined
+
+`Libertad-Public-Market.xlsx-June-3-2026.pdf` has no `Specifications` column:
+
+```
+Commodity Group | Commodities | Unit | LOW | HIGH | PREVAILING | AVERAGE
+```
+
+Otherwise it is a perfectly ordinary, readable sheet. It is **quarantined whole** rather than
+read, because reading it would shift every price one column left, and because supporting the
+layout changes what identifies a commodity — the triple `(group, commodity, specification)`
+loses a third of itself. Other Libertad files from January and April 2026 use the normal
+eight-column layout, so this is an occasional variant rather than a market-wide one.
+
+### The commodity vocabulary differs between markets and over time
+
+Measured 2026-07-28 across the twelve committed sheets: **87.1%** of parsed rows resolve
+against the seeded alias table, down from 96.4% on the original four. The drop is real
+coverage information, not a regression.
+
+Two sheets sit far below the rest — `Surigao-City-Public-Market` (64%) and the January 2025
+Libertad sheet (63%) — and they fail on the same kind of thing:
+
+| Seeded | Also published as |
+|---|---|
+| `Well Milled` | `Well-Milled`, `Well-Milled (white tag)` |
+| `Regular Milled` | `Regular-Milled`, `Regular-Milled (white tag)` |
+| `Bangus, Large` | `Bangus` + specification `Large` |
+| `Premium` | `Premium (yellow tag)`, `Premium (Imported)` |
+
+Each of those is obvious to a person and unsafe for a machine: the same hyphen-insensitive
+rule that merges `Well-Milled` into `Well Milled` would merge `Corn Grits Feed Grade` into
+`Corn Grits Food Grade`. They stay unmapped and quarantine at stage `alias` until curated.
+
+### The same sheet is published under two URLs
+
+`SanFranciscoADS/April/ADS-April-23-2026.pdf` and
+`SanFranciscoADS/April/SanFracisco-April-23-2026.pdf` (the source's own typo) are **byte for
+byte identical** — 83,840 bytes, same SHA-256. Verified 2026-07-28.
+
+This is the case the content-addressed cache was built for: two URL records, one blob. It is
+also why the upsert compares figures rather than filenames — a republication is not a
+correction.
+
+**No `Revised-` file is obtainable from a permitted host.** The Caraga index contains no
+file matching `revised` (checked over all 535 links). The `Revised-` files are published by
+`www.da.gov.ph`, whose robots.txt disallows every PDF, so one can only reach the fixture
+corpus by manual download.
+
 ### The sheet's own date beats the filename
 
 `Mayor-Salvador-Calo-July-19-2029.pdf` contains `Date of Monitoring : July 19, 2026`.
@@ -161,6 +255,11 @@ needs its group, not just its name.**
 The filename year is a typo; the header is correct. **Therefore the PDF header is the
 observation date, and the index scraper's date is provisional** — good only for deciding
 what to fetch and for spotting files worth a second look.
+
+It is not a one-off, and it goes both ways. `Libertad-Public-Market_Jan-07-2025.pdf`
+contains `Date of Monitoring : January 7, 2026` — the ordinary new-year slip, with the
+filename a year behind rather than three ahead. Two of twelve committed sheets disagree with
+their own filenames.
 
 This corrects an earlier plan to quarantine future-dated files at index stage: doing so
 would have discarded this perfectly valid 2026 sheet. Any `not_after` bound on the scraper
@@ -318,6 +417,33 @@ and doubled extensions are a habit here too (`...July-23-2026.xlsx.pdf`), matchi
 oil monitor's `.pdf.pdf`.
 
 ---
+
+## PSGC codes are the one thing here not verified by fetch
+
+Everything else in this file was checked by direct request. The region codes in
+`src/presyowatch/data/regions.csv` were not, and that is recorded rather than hidden.
+
+`https://psa.gov.ph/robots.txt` **allows** `/classification/psgc` (checked 2026-07-28), but
+the page itself returns **HTTP 403** to this project's client. Getting past that would mean
+presenting a browser User-Agent, which is routing around an access control and is not
+something this project does — for the same reason it does not route around a `Disallow`.
+
+So the six Caraga codes are transcribed from the PSGC rather than fetched:
+
+| PSGC | Name | Level |
+|---|---|---|
+| 160000000 | Caraga | region |
+| 160200000 | Agusan del Norte | province |
+| 160300000 | Agusan del Sur | province |
+| 166700000 | Surigao del Norte | province |
+| 166800000 | Surigao del Sur | province |
+| 168500000 | Dinagat Islands | province |
+
+**Treat these as unconfirmed until someone checks them against the PSA publication by hand.**
+A wrong code mislabels a region; it does not corrupt a price, and it is fixable with a data
+migration. Note also that Butuan City's sheets name **Agusan del Norte** as their province,
+which is where the city sits geographically even though it is administratively independent
+of the province.
 
 ## Legal position
 

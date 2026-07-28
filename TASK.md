@@ -26,10 +26,11 @@ localhost one.
 - [x] Commodity alias table + resolver; unmapped names quarantined, never guessed
 - [x] Idempotent upsert on the natural key; `Revised-` files update in place and append to
       `observation_revisions`
-- [ ] Backfill runner over a date range; `ingestion_runs` row per source per run
-- [ ] Fixture corpus: commit ~10 real PDFs including at least one revised file, one with
+- [x] Backfill runner over a date range; `ingestion_runs` row per source per run
+- [x] Fixture corpus: commit ~10 real PDFs including at least one revised file, one with
       missing values, and one that fails to parse
-- [ ] Tests: parser unit tests against fixtures; **idempotency test** (run twice, assert
+      — **13 committed, but no revised file.** See "no `Revised-` file is reachable" below.
+- [x] Tests: parser unit tests against fixtures; **idempotency test** (run twice, assert
       identical DB state); revision-handling test
 
 ## Phase 2 — API + CI (target: 1 week)
@@ -87,56 +88,60 @@ _(append new tasks here as they surface — do not silently expand scope in othe
 - [x] **`.gitattributes`** — force LF, mark PDF/XLSX binary, and keep `tests/fixtures/**`
       byte-exact. Fixture hashes are load-bearing for the content-addressed cache, and
       `www.da.gov.ph` serves CRLF.
-- [ ] **Record `robots_checked_at` and the robots verdict per source** when the `sources`
-      table lands. `HttpClient.robots_decision()` already returns everything needed;
-      nothing persists it yet.
+- [ ] **Record `robots_checked_at` and the robots verdict per source.** The columns exist and
+      the seed leaves them null; `HttpClient.robots_decision()` returns everything needed and
+      the backfill runner is the natural place to write it, once per run.
 - [ ] **Decide what the ingester does with a source that requests a large `Crawl-delay`.**
       The client honours it in full and logs `large_crawl_delay_requested`; no caller acts
       on that yet, so a source asking for 300s would silently make a run very long.
 - [ ] **Optional: a network-marked integration test** for the live hosts. Verified manually
       on 2026-07-28 (DA PDF refused, Caraga fetched, rate limiter observed); not automated,
       because CI should not depend on a government server being up.
-- [ ] **The backfill runner must tolerate dead hrefs.** Three PDF links on Caraga's index
-      return 404 (verified 2026-07-28). A 404 on one href is a skipped file, not a failed
-      run — quarantine the href and carry on. The scraper does not fetch, so this belongs to
-      whatever drives it. See KNOWLEDGE.md § "Caraga's directory layout is not trustworthy".
+- [x] **The backfill runner must tolerate dead hrefs.** Done: a 404 quarantines the href at
+      stage `index` and the run continues, ending `partial` rather than `failed`.
 - [ ] **Recover the 81 year-less Caraga links (15% of the index).** Files like
       `Cabadbaran-City-Public-Market_July-22.pdf` carry no year in the filename or the link
       text. They are quarantined rather than guessed, because the only available year is the
       `FY####` directory and that contradicts the filename 12.6% of the time. The likely
       answer is the page's own grouping — the links sit under year/month headings — which
       means passing surrounding page context into the scraper, not just the anchor.
-- [ ] ~~**Have the ingester pass `not_after=today` to `scrape_index`.**~~ **Superseded — do
-      not do this.** The 2029-dated file contains `Date of Monitoring : July 19, 2026`, so
+- [x] ~~**Have the ingester pass `not_after=today` to `scrape_index`.**~~ **Superseded — done
+      the other way.** The runner applies no `not_after` at index stage and checks the parsed
+      header date against the run date instead. The 2029-dated file contains `Date of Monitoring : July 19, 2026`, so
       the filename year is the typo and the PDF header is correct. Quarantining on the
       filename date would have thrown away a valid sheet. Instead: keep any `not_after`
       bound generous, and reconcile the index date against the parsed header date *after*
       fetching. A disagreement is worth recording, not worth discarding the file over.
-- [ ] **Decide what to do when the index date and the sheet header date disagree.** The
-      parser trusts the header. The mismatch is a real signal (a mislabelled file) and should
-      probably be logged or counted on the data quality page rather than ignored.
-- [ ] **Normalise province and market names before populating `regions`/`markets`.** The
-      sheets write `Agusan del Norte` and `Agusan Del Norte` for the same province, and
-      `Province of Dinagat Islands` for another. Matching on the raw string would create
-      duplicate regions.
+- [x] **Decide what to do when the index date and the sheet header date disagree.** Decided:
+      the header wins, the disagreement is logged as `index_date_disagrees_with_sheet` and
+      counted as `BackfillOutcome.date_mismatches`. Two of twelve fixtures disagree. Still to
+      do: surface the count on the data quality page (Phase 4).
+- [x] **Normalise province and market names before populating `regions`/`markets`.** Done in
+      `presyowatch.places`: a normalised key drops a leading `Province of` and folds case.
+      Provinces resolve against the seed or quarantine; markets are created on first sight and
+      matched on the normalised triple.
 - [ ] **Give `is_agricultural_input` somewhere to live.** The parser flags feeds, fertiliser
       and pesticides so a food chart can exclude them, but `price_observations` has no column
       for it. Either derive it from `commodities.group` at query time or add a column —
       decide before the API filters on it.
-- [ ] **Curate the 20 unseeded commodity triples.** The seed covers the 149 triples attested
-      by 3+ of the 4 fixture sheets, giving 96.4% row resolution. The remaining 20 are almost
-      all extraction artefacts of triples already seeded — `'pcs/kg) Male, Medium (12-14'` for
+- [ ] **Curate the unseeded commodity triples — now 103, not 20.** The seed covers the 149 triples attested
+      by 7+ of the 12 fixture sheets, giving 87.1% row resolution. Many are still extraction
+      artefacts of triples already seeded — `'pcs/kg) Male, Medium (12-14'` for
       `'Male, Medium (12-14 pcs/kg)'`, `'Habichuelas/Baguio Beans,'` truncated mid-name — and
       each needs a human to add an alias row pointing at the existing canonical commodity.
       They quarantine at stage `alias` until then, which is the intended behaviour.
-      `Banana (Cardava)` is the one genuine judgement call: it is another name for
-      `Banana (Saba)`, so it is a synonym rather than a new commodity.
-- [ ] **Load the seed into the database.** `load_seed()` reads the committed CSVs and
-      `CommodityResolver.from_seed()` builds a resolver from them, but nothing writes
-      `commodities` or `commodity_aliases` rows yet. Belongs with the seed-data item above.
-- [ ] **Regenerate the seed once the fixture corpus grows.** The attestation threshold is
-      "more than half the sheets", so a corpus of ten will draw the line differently — and
-      better — than a corpus of four.
+      `Banana (Cardava)` is one genuine judgement call: it is another name for `Banana (Saba)`,
+      so it is a synonym rather than a new commodity. The wider corpus added a second, larger
+      class of them — whole vocabularies that differ between markets and over time
+      (`Well-Milled` for `Well Milled`, `Bangus` + spec `Large` for `Bangus, Large`,
+      `Premium (yellow tag)`). See KNOWLEDGE.md § "The commodity vocabulary differs between
+      markets and over time". These are the two low-resolution sheets and are worth curating
+      first: it is roughly 30 alias rows for about 10 points of coverage.
+- [x] **Load the seed into the database.** `presyowatch.db.seed.seed_reference_data` upserts
+      sources, regions, commodities and aliases; `python -m presyowatch seed` runs it.
+- [x] **Regenerate the seed once the fixture corpus grows.** Done at twelve sheets: threshold
+      7 of 12, 143 triples seeded, 103 left for curation. Do it again next time the corpus
+      grows.
 - [ ] **Archive index snapshots.** The index page is deliberately not `fetch_once`d because it
       is mutable, so nothing keeps a copy of what the listing said on a given day. A
       content-addressed store keyed by hash alone — no URL index — would preserve the audit
@@ -144,15 +149,15 @@ _(append new tasks here as they surface — do not silently expand scope in othe
 - [ ] **Surface `RawCache.verify()` on the data quality page.** It re-hashes every blob and
       reports corruption, but nothing calls it yet. It wants to be a scheduled check, not
       a method nobody runs.
-- [ ] **Decide how `CacheConflictError` is handled by the ingester.** The cache refuses to
-      overwrite a known URL whose bytes changed, which is the right default, but a run that
-      hits it currently just fails. It should probably quarantine and continue.
+- [x] **Decide how `CacheConflictError` is handled by the ingester.** Decided: quarantine the
+      file at stage `index` with the two hashes in the reason, and continue. Untested against a
+      real occurrence, because no source has done it yet.
 - [x] **`scripts/with_temp_postgres.py`** — runs a command against a throwaway Postgres via
       the `pgserver` wheel, so schema work needs neither Neon nor Docker. Used to verify the
       migration applies, reverses, and does not drift from the models.
-- [ ] **Seed data for `sources`, `regions`, and `commodities`.** The schema exists but is
-      empty; the ingester cannot write an observation until Caraga has a `sources` row and
-      its markets have `regions` rows. Probably an Alembic data migration or a seed command.
+- [x] **Seed data for `sources`, `regions`, and `commodities`.** Committed as CSVs under
+      `presyowatch/data`, loaded by `python -m presyowatch seed`. A seed command rather than a
+      data migration, because the commodity seed is regenerated whenever the corpus grows.
 - [ ] **Wire `PRESYOWATCH_TEST_DATABASE_URL` into CI** (Phase 2) so `tests/db` stops being
       skipped there. Locally it runs via the helper script above.
 - [ ] **The backfill runner must ingest a date's files in index order.** `upsert_observations`
@@ -170,3 +175,28 @@ _(append new tasks here as they surface — do not silently expand scope in othe
       that are present, so the stale observation stays as published. Publishing a row as
       `unavailable` is handled; removing it entirely is not, and it is not yet known whether
       the DA does that.
+- [ ] **No `Revised-` file is reachable, so end-to-end revision handling is untested.** The
+      `Revised-` files are published only by `www.da.gov.ph`, whose robots.txt disallows every
+      PDF on the host; Caraga's 535-link index contains none (checked 2026-07-28). Revision
+      handling *is* tested at the schema level in `tests/db/test_upsert.py`, but nothing
+      exercises it through the runner on a real pair of files. **This needs a human to
+      download one `Revised-*.pdf` by hand** — permitted, since robots.txt governs automated
+      access — and commit it beside its original. Until then the corpus has the byte-identical
+      San Francisco republication, which proves the *non*-correction path only.
+- [ ] **Support the seven-column sheet, or decide not to.** One committed fixture omits the
+      `Specifications` column entirely and is quarantined whole. Supporting it means deciding
+      what identifies a commodity when a third of the triple is missing — probably a
+      per-source flag saying the specification is absent rather than empty. Quantify first:
+      four Libertad sheets were sampled and only one was seven-column, so this may be rare.
+- [ ] **Verify the PSGC codes by hand.** `data/regions.csv` is the only thing in this project
+      not confirmed by direct fetch; `psa.gov.ph` returns 403 to our client and spoofing a
+      browser User-Agent is not something we do. See KNOWLEDGE.md § "PSGC codes are the one
+      thing here not verified by fetch".
+- [ ] **`markets` needs a normalised uniqueness constraint.** `resolve_market` matches on
+      normalised names, but the unique constraint is on the raw columns, so two processes
+      racing on a market's first sighting could still insert `Butuan City` and `butuan city`.
+      Single-flight ingestion makes this theoretical today. A generated column plus a unique
+      index on it would make the database enforce what the code intends.
+- [ ] **Nothing reprocesses quarantine.** Rows are written with enough raw payload to be
+      replayed after a parser or alias fix, which was the point, but there is no command that
+      replays them. Roughly 240 rows per run currently sit there awaiting curation.
