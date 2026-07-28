@@ -10,10 +10,31 @@ npm run dev                    # http://localhost:3000
 npm run typecheck && npm run build
 ```
 
-The build writes `out/` — plain HTML, CSS and JS. Deploy it to Vercel or Cloudflare Pages
-with `out` as the output directory and `NEXT_PUBLIC_API_URL` set at build time. Note that
-`NEXT_PUBLIC_*` is baked into the bundle by `next build`, so changing the API URL means a
-rebuild, not just an environment edit.
+The build writes `out/` — plain HTML, CSS and JS.
+
+`NEXT_PUBLIC_API_URL` is baked into the bundle by `next build`, so changing the API URL
+means a rebuild, not just an environment edit.
+
+### Deploying
+
+**Vercel.** Set the project's *Root Directory* to `web` and add `NEXT_PUBLIC_API_URL`. Leave
+build command and output directory on their defaults.
+
+Do **not** set an Output Directory of `out` on Vercel, tempting as it looks. Its Next.js
+builder reads `.next/routes-manifest.json` after the build; setting an output directory sends
+it looking in `out/` instead, and the deploy fails with `routes-manifest.json couldn't be
+found` *after* a build that succeeded. Vercel already understands `output: "export"` and
+serves `out` on its own. This is why `vercel.json` here declares only the framework and the
+headers.
+
+**Cloudflare Pages.** The opposite: it knows nothing about `vercel.json`, so set root
+directory `web`, build command `npm run build`, output directory `out`, and `NODE_VERSION`
+to 22. The security headers in `vercel.json` do not apply there — add a `_headers` file if
+you want them.
+
+The `connect-src` in the CSP names the API's host explicitly. Point it at wherever the API
+actually runs, or the browser will block every request from the page and the dashboard will
+show error states with nothing obviously wrong.
 
 ## Why static
 
