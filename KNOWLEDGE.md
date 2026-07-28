@@ -117,10 +117,42 @@ AVERAGE`. Two facts make this far better than clustering words by y-coordinate:
   returns **`""`**. That distinction is load-bearing: `None` means "same group as above",
   `""` in a price column means "not monitored".
 
-Anatomy of a sheet: 3–4 pages, ~153 data rows, **21 commodity groups**. The header block
-and the column header appear on page 1 only, so pages 2+ are pure data and a group span can
-continue across a page boundary. The "blank means not available" note is itself a row of
-the table and must be skipped.
+Anatomy of a sheet: 3–4 pages, ~153 data rows, **21 commodity groups**. The "blank means not
+available" note is itself a row of the table and must be skipped.
+
+**Not every sheet repeats its header.** The three-page sheets put the header block and column
+header on page 1 only. The four-page Mayor Salvador Calo sheet repeats **both on every page**,
+and worse, a group heading gets absorbed onto the end of that repeated metadata cell:
+`...Date of Monitoring : July 19, 2026\nLIVESTOCK MEAT\nPRODUCTS`. Treating any first-column
+text as a heading would set the group to the whole header block.
+
+### An empty group cell means a page break, and its meaning depends on which side
+
+This is the subtlest thing in these files. When a group's block straddles a page break, the
+heading cell is split and one half extracts as `""` — a real closed cell with no text — while
+the heading renders on the other half. **Both directions occur:**
+
+| Situation | Where the `""` cells are | Correct heading |
+|---|---|---|
+| Block *starts* near the bottom of a page | end of that page | the **next** heading (drawn overleaf) |
+| Block *continues* onto a new page | first data rows of the new page | the **previous** heading |
+
+Real examples: `Avocado` and three bananas begin the `FRUITS` block at the foot of a page, so
+their heading appears overleaf. `Porkchop`, `Pork ribs` and `Pork pata (hind)` are the tail of
+`LIVESTOCK MEAT PRODUCTS` at the top of a page, where the next heading is the unrelated
+`POULTRY MEAT PRODUCTS`.
+
+So: **an empty heading cell on the first data row of a page keeps the previous heading;
+anywhere else it takes the next one.** Forward-filling everything put Avocado under `SPICES`
+and pork under `POULTRY`.
+
+**How to catch this class of bug:** the four sheets publish the same 21 groups, so a commodity
+name appearing under different groups *on different sheets* means the parser is inconsistent,
+not the source. That cross-sheet check is what exposed it, and it is now a test. The only
+legitimate cross-group names are the seven rice varieties — `Premium`, `Basmati`, `Glutinous`,
+`Japonica/Jasponica`, `Other Special Rice`, `Regular Milled`, `Well Milled` — which really do
+appear under both `IMPORTED` and `LOCAL COMMERCIAL RICE`. **A commodity's identity therefore
+needs its group, not just its name.**
 
 ### The sheet's own date beats the filename
 

@@ -546,13 +546,17 @@ class _StubPdf:
 
 def test_a_page_without_a_table_is_skipped_not_fatal() -> None:
     """A trailing blank page must not abort a sheet whose other pages are fine."""
-    assert _extract_rows(_StubPdf([_StubPage([]), _StubPage([])])) == []
+    page_numbers, rows = _extract_rows(_StubPdf([_StubPage([]), _StubPage([])]))
+
+    assert rows == []
+    assert page_numbers == []
 
 
 def test_a_short_row_is_ignored() -> None:
     """The metadata block above the table extracts as a row with too few cells."""
     rows, rejected = _read_body(
         [
+            (),  # stray ruling lines occasionally yield a row with no cells at all
             ("Bantay Presyo Monitoring\nProvince : X",),
             HEADER_ROW,
             data_row("Basmati", group="RICE", average="50.00"),
@@ -575,3 +579,129 @@ def test_an_entirely_blank_row_is_ignored() -> None:
 
     assert rejected == []
     assert len(rows) == 1
+
+
+# -- group headings across page breaks -------------------------------------------
+#
+# A block whose heading cell is split by a page break extracts as `""` rather than `None`,
+# and the heading lands on one side or the other. Forward filling every empty cell put the
+# same commodities in different groups on different sheets, which is how this was caught.
+
+RICE_IN_BOTH_GROUPS = frozenset(
+    {
+        "Basmati",
+        "Glutinous",
+        "Japonica/Jasponica",
+        "Other Special Rice",
+        "Premium",
+        "Regular Milled",
+        "Well Milled",
+    }
+)
+"""Names that genuinely appear under both IMPORTED and LOCAL COMMERCIAL RICE.
+
+These are the reason a commodity's identity needs its group, not just its name.
+"""
+
+
+@pytest.mark.parametrize("name", ALL_SHEETS)
+@pytest.mark.parametrize(
+    ("commodity", "expected_group"),
+    [
+        # Heading drawn on the page *after* its first rows.
+        ("Avocado", "FRUITS"),
+        ("Banana (Saba)", "FRUITS"),
+        # Heading drawn on the page *before* its last rows.
+        ("Porkchop", "LIVESTOCK MEAT PRODUCTS"),
+        ("Pork ribs", "LIVESTOCK MEAT PRODUCTS"),
+        ("Bottle Gourd (Upo)", "HIGHLAND VEGETABLES"),
+        ("Ampalaya", "LOWLAND VEGETABLES"),
+    ],
+)
+def test_commodities_split_by_a_page_break_get_the_right_group(
+    name: str, commodity: str, expected_group: str
+) -> None:
+    """Avocado is not a spice and pork is not poultry, on any sheet."""
+    matching = [row for row in load(name).rows if row.commodity == commodity]
+
+    for row in matching:
+        assert row.group == expected_group
+
+
+def test_no_commodity_lands_in_different_groups_on_different_sheets() -> None:
+    """Cross-sheet agreement is the evidence that the page-break rule is right.
+
+    Four markets publish the same 21 groups in the same order, so a name appearing under
+    two different groups across sheets means the parser, not the source, is inconsistent.
+    The rice names are the genuine exception and are listed explicitly.
+    """
+    groups_by_commodity: dict[str, set[str]] = {}
+    for name in ALL_SHEETS:
+        for row in load(name).rows:
+            groups_by_commodity.setdefault(row.commodity, set()).add(row.group)
+
+    inconsistent = {
+        commodity: sorted(groups)
+        for commodity, groups in groups_by_commodity.items()
+        if len(groups) > 1 and commodity not in RICE_IN_BOTH_GROUPS
+    }
+
+    assert inconsistent == {}
+
+
+def test_the_rice_exception_is_real_and_not_an_artefact() -> None:
+    """`Premium` is a different commodity depending on which rice group it is in."""
+    rows = [row for row in load(CABADBARAN).rows if row.commodity == "Premium"]
+
+    assert {row.group for row in rows} == {
+        "IMPORTED COMMERCIAL RICE",
+        "LOCAL COMMERCIAL RICE",
+    }
+
+
+def test_a_heading_absorbed_into_a_repeated_header_block_is_not_used_as_a_group() -> None:
+    """One sheet repeats its header block on every page and swallows a heading into it.
+
+    The cell reads `...Date of Monitoring : July 19, 2026\nLIVESTOCK MEAT\nPRODUCTS`.
+    Treating that as a heading would set the group to the entire header block.
+    """
+    for row in load(MAYOR_CALO).rows:
+        assert "Bantay Presyo" not in row.group
+        assert "Date of Monitoring" not in row.group
+
+
+def test_an_empty_heading_at_the_top_of_a_page_continues_the_previous_block() -> None:
+    """The block carries on from the previous page; the next heading is unrelated."""
+    rows, _ = _read_body(
+        [
+            HEADER_ROW,
+            data_row("Pork Belly", group="LIVESTOCK MEAT PRODUCTS", average="300.00"),
+            # page break, header repeated, then the block's tail with an empty heading cell
+            HEADER_ROW,
+            data_row("Porkchop", group="", average="310.00"),
+            data_row("Whole Chicken", group="POULTRY MEAT PRODUCTS", average="200.00"),
+        ],
+        [0, 0, 1, 1, 1],
+    )
+
+    by_commodity = {row.commodity: row.group for row in rows}
+    assert by_commodity["Porkchop"] == "LIVESTOCK MEAT PRODUCTS"
+    assert by_commodity["Whole Chicken"] == "POULTRY MEAT PRODUCTS"
+
+
+def test_an_empty_heading_mid_page_belongs_to_the_block_that_follows() -> None:
+    """The block starts here but its heading is drawn overleaf."""
+    rows, _ = _read_body(
+        [
+            HEADER_ROW,
+            data_row("Sweet Pepper", group="SPICES", average="100.00"),
+            data_row("Avocado", group="", average="120.00"),
+            # page break; the heading renders here, at the top of the next page
+            data_row("Calamansi", group="FRUITS", average="60.00"),
+        ],
+        [0, 0, 0, 1],
+    )
+
+    by_commodity = {row.commodity: row.group for row in rows}
+    assert by_commodity["Avocado"] == "FRUITS"
+    assert by_commodity["Sweet Pepper"] == "SPICES"

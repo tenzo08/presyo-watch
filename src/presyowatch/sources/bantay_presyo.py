@@ -16,17 +16,21 @@ The label is one tall cell spanning its whole block, and text extraction emits i
 its baseline happens to fall — usually in the middle or at the end. Assigning groups by
 reading order would attach every block to the wrong commodities. KNOWLEDGE.md therefore
 requires positional extraction, and the strongest positional signal available is the table's
-own ruling lines: ``find_tables()`` reconstructs the grid, puts the label in the **first**
-row of its span, and gives ``None`` for the continuation rows underneath it. Group
-assignment is then a forward fill, and the geometry has been done by something better at it
-than a y-coordinate heuristic would be.
+own ruling lines: ``find_tables()`` reconstructs the grid and normally puts the label in the
+first row of its span, with ``None`` for the continuation rows underneath. Group assignment
+is then a forward fill, with the geometry done by something better at it than a y-coordinate
+heuristic would be.
 
 The distinction between ``None`` and ``""`` in an extracted cell is load-bearing:
 
 ``None``
     There is no cell here — it is covered by a vertical span above. Means "same group".
 ``""``
-    A real, empty cell. In a price column that means the commodity was not monitored.
+    A real, closed cell with no text. In a *price* column that means the commodity was not
+    monitored. In the *group* column it means the block straddles a page break and the
+    heading was drawn on the other side of it — which side depends on page position, and
+    getting that wrong silently files commodities under the wrong group. See
+    :func:`_group_per_row`.
 
 **The PDF's own date wins over the filename.** ``Mayor-Salvador-Calo-July-19-2029.pdf``
 contains ``Date of Monitoring : July 19, 2026`` (verified 2026-07-28). The filename year is
@@ -277,25 +281,29 @@ def _is_column_header(cells: tuple[str | None, ...]) -> bool:
     return labels == EXPECTED_COLUMNS
 
 
-def _extract_rows(pdf: Any) -> list[tuple[str | None, ...]]:  # noqa: ANN401
-    """Return every table row across every page, in order.
+def _extract_rows(pdf: Any) -> tuple[list[int], list[tuple[str | None, ...]]]:  # noqa: ANN401
+    """Return ``(page_numbers, rows)`` for every table row across every page, in order.
 
     ``pdf`` is annotated ``Any`` because ``pdfplumber`` ships no type information; naming a
     type it does not export would be a fiction mypy could not check.
 
-    The table continues across pages without repeating its header, so the pages are simply
-    concatenated and a group span may legitimately continue from one page onto the next.
+    The page number of each row is kept rather than discarded because a group heading's
+    meaning depends on where its block sits relative to a page break — see
+    :func:`_group_per_row`.
     """
+    page_numbers: list[int] = []
     rows: list[tuple[str | None, ...]] = []
-    for page in pdf.pages:
+    for number, page in enumerate(pdf.pages):
         tables = page.find_tables()
         if not tables:
             continue
         # The sheets carry exactly one table per page; the widest is the right one if a
         # stray line ever produces more.
         widest = max(tables, key=lambda table: len(table.rows))
-        rows.extend(tuple(row) for row in widest.extract())
-    return rows
+        for row in widest.extract():
+            rows.append(tuple(row))
+            page_numbers.append(number)
+    return page_numbers, rows
 
 
 def parse_sheet(pdf_bytes: bytes) -> ParsedSheet:
@@ -319,7 +327,7 @@ def parse_sheet(pdf_bytes: bytes) -> ParsedSheet:
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             page_count = len(pdf.pages)
             first_page_text = pdf.pages[0].extract_text() or "" if page_count else ""
-            table_rows = _extract_rows(pdf)
+            page_numbers, table_rows = _extract_rows(pdf)
     except Exception as exc:
         # Deliberately broad: pdfplumber and its pdfminer backend raise an assorted and
         # undocumented set of errors on malformed input — and every one of them means the
@@ -336,7 +344,7 @@ def parse_sheet(pdf_bytes: bytes) -> ParsedSheet:
         raise SheetParseError(msg)
 
     header = _parse_header(first_page_text)
-    rows, rejected = _read_body(table_rows)
+    rows, rejected = _read_body(table_rows, page_numbers)
 
     logger.info(
         "sheet_parsed",
@@ -355,16 +363,125 @@ def parse_sheet(pdf_bytes: bytes) -> ParsedSheet:
     )
 
 
+def _is_data_row(cells: tuple[str | None, ...]) -> bool:
+    """Return whether this row describes a commodity.
+
+    The metadata block, the column header, and the footer note all live inside the table
+    without being data.
+    """
+    if len(cells) < len(EXPECTED_COLUMNS) or _is_column_header(cells):
+        return False
+    if _FOOTER_NOTE.match(_collapse(cells[_GROUP])):
+        return False
+    return bool(_collapse(cells[_COMMODITY]))
+
+
+def _carries_a_group_label(cells: tuple[str | None, ...]) -> bool:
+    """Return whether this row's group cell is a real commodity-group heading.
+
+    A heading always sits beside the first commodity of its block, so anything in the first
+    column of a non-data row is not one. That matters: on sheets which repeat the header
+    block on every page, the metadata cell can have a group name absorbed onto its end
+    (``...Date of Monitoring : July 19, 2026\\nLIVESTOCK MEAT\\nPRODUCTS``), and treating
+    that as a heading would set the group to the whole header block.
+    """
+    return _is_data_row(cells) and bool(_collapse(cells[_GROUP]))
+
+
+def _group_per_row(
+    table_rows: list[tuple[str | None, ...]],
+    page_numbers: list[int] | None = None,
+) -> list[str | None]:
+    """Resolve the commodity group for every row from the table's geometry.
+
+    Three cell states have to be told apart, and the third is a bug found the hard way.
+
+    a label
+        Starts a new block.
+    ``None``
+        No cell here at all — covered by the span above. Same group; forward fill.
+    ``""``
+        A real cell, closed by ruling lines, with no text. This means the block **straddles
+        a page break**, and the heading was drawn on one side of it.
+
+    The empty case is genuinely ambiguous and page position resolves it. Both of these
+    occur in the fixtures:
+
+    - A block *starting* near the bottom of a page has its heading drawn on the next page,
+      so its first rows have empty cells and the label comes **after** them. Avocado and
+      three bananas, whose heading ``FRUITS`` renders overleaf.
+    - A block *continuing* onto a new page has its leading rows at the top of that page,
+      with the heading already behind them. ``Porkchop`` under ``LIVESTOCK MEAT PRODUCTS``,
+      where the next label is the unrelated ``POULTRY MEAT PRODUCTS``.
+
+    An empty cell on the first data row of a page therefore keeps the previous heading;
+    anywhere else it takes the next one. Getting this wrong put the same commodities in
+    different groups on different sheets, which is exactly how it was caught — and the four
+    fixtures now agreeing with each other is the evidence it is right.
+    """
+    pages = page_numbers if page_numbers is not None else [0] * len(table_rows)
+
+    labels: list[str | None] = [
+        _collapse(cells[_GROUP]) if _carries_a_group_label(cells) else None for cells in table_rows
+    ]
+
+    # Which label comes next, for rows that have none of their own?
+    upcoming: list[str | None] = [None] * len(table_rows)
+    following: str | None = None
+    for index in reversed(range(len(table_rows))):
+        if labels[index]:
+            following = labels[index]
+        upcoming[index] = following
+
+    opens_a_page = _rows_opening_a_page(table_rows, pages)
+
+    resolved: list[str | None] = []
+    current: str | None = None
+    for index, cells in enumerate(table_rows):
+        label = labels[index]
+        if label:
+            current = label
+        elif _has_empty_group_cell(cells) and index not in opens_a_page:
+            current = upcoming[index] or current
+        resolved.append(current)
+    return resolved
+
+
+def _has_empty_group_cell(cells: tuple[str | None, ...]) -> bool:
+    """Return whether the group column holds a real cell with no text in it."""
+    if len(cells) <= _GROUP:
+        return False
+    return cells[_GROUP] is not None and not _collapse(cells[_GROUP])
+
+
+def _rows_opening_a_page(table_rows: list[tuple[str | None, ...]], pages: list[int]) -> set[int]:
+    """Return the index of the first *data* row on each page.
+
+    Not simply the first row: sheets that repeat the header block put two or three
+    non-data rows at the top of every page.
+    """
+    seen: set[int] = set()
+    opening: set[int] = set()
+    for index, cells in enumerate(table_rows):
+        page = pages[index]
+        if page in seen or not _is_data_row(cells):
+            continue
+        seen.add(page)
+        opening.add(index)
+    return opening
+
+
 def _read_body(
     table_rows: list[tuple[str | None, ...]],
+    page_numbers: list[int] | None = None,
 ) -> tuple[list[PriceRow], list[RejectedRow]]:
-    """Turn raw table rows into price rows, carrying the group forward across spans."""
+    """Turn raw table rows into price rows, resolving each row's commodity group."""
     rows: list[PriceRow] = []
     rejected: list[RejectedRow] = []
-    group: str | None = None
     seen_column_header = False
+    groups = _group_per_row(table_rows, page_numbers)
 
-    for cells in table_rows:
+    for index, cells in enumerate(table_rows):
         if len(cells) < len(EXPECTED_COLUMNS):
             # The metadata block above the table extracts as a short row.
             continue
@@ -378,15 +495,11 @@ def _read_body(
         if _FOOTER_NOTE.match(label):
             # The "blank means not available" note is itself a row of the table.
             continue
-        if label and not commodity:
-            # The header block: one tall cell with no commodity beside it.
-            continue
-        if label:
-            group = label
         if not commodity:
+            # The header block, or an empty row produced by stray ruling lines.
             continue
 
-        resolved = _build_row(cells, group=group)
+        resolved = _build_row(cells, group=groups[index])
         if isinstance(resolved, PriceRow):
             rows.append(resolved)
         else:
