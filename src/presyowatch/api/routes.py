@@ -21,22 +21,34 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session, aliased
 
+from presyowatch.analytics.anomalies import (
+    DEFAULT_THRESHOLD,
+    DEFAULT_WINDOW,
+    AnomalyConfig,
+    Point,
+    flag_series,
+)
 from presyowatch.api.deps import get_session
 from presyowatch.api.schemas import (
     CommodityOut,
+    FlaggedOut,
     MarketOut,
     MoverOut,
     ObservationOut,
     Page,
+    Quality,
+    QuarantineCount,
     RegionOut,
     RunOut,
     SourceOut,
+    SourceQuality,
 )
 from presyowatch.db.models import (
     Commodity,
     IngestionRun,
     Market,
     PriceObservation,
+    QuarantinedRow,
     Region,
     Source,
 )
@@ -428,3 +440,199 @@ def list_movers(
         ) in rows
     ]
     return Page(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.get("/anomalies", response_model=Page[FlaggedOut], tags=["prices"])
+def list_anomalies(
+    session: Annotated[Session, Depends(get_session)],
+    commodity: Annotated[str, Query(description="Canonical slug. Required.")],
+    market: Annotated[int | None, Query(description="Market id.")] = None,
+    date_from: Annotated[date | None, Query(description="Earliest observation date.")] = None,
+    date_to: Annotated[date | None, Query(description="Latest observation date.")] = None,
+    window: Annotated[
+        int, Query(ge=3, le=61, description="Neighbouring days compared.")
+    ] = DEFAULT_WINDOW,
+    threshold: Annotated[
+        float, Query(gt=0, le=50, description="Modified z-score cut-off.")
+    ] = DEFAULT_THRESHOLD,
+    only_flagged: Annotated[bool, Query(description="Return only the flagged rows.")] = True,
+    limit: Limit = DEFAULT_LIMIT,
+    offset: Offset = 0,
+) -> Page[FlaggedOut]:
+    """Annotate one commodity's prices, per market.
+
+    A commodity is required rather than optional. Flagging is only meaningful within a single
+    series, and running it across everything at once would compare the price of rice with the
+    price of fertiliser and report the difference as remarkable.
+
+    Each market is judged separately for the same reason — a Butuan price is not an anomalous
+    Tandag price — so the series are split before anything is computed.
+
+    ``window`` and ``threshold`` are query parameters because PLANNING.md requires them to be
+    configuration rather than magic numbers, and because a reader who distrusts a flag should
+    be able to move the goalposts and watch what happens.
+    """
+    statement = (
+        select(PriceObservation, Market)
+        .join(Market, Market.id == PriceObservation.market_id)
+        .join(Commodity, Commodity.id == PriceObservation.commodity_id)
+        .where(Commodity.canonical_slug == commodity)
+        .order_by(PriceObservation.market_id, PriceObservation.observed_on)
+    )
+    if market is not None:
+        statement = statement.where(PriceObservation.market_id == market)
+    if date_from is not None:
+        statement = statement.where(PriceObservation.observed_on >= date_from)
+    if date_to is not None:
+        statement = statement.where(PriceObservation.observed_on <= date_to)
+
+    config = AnomalyConfig(window=window, threshold=threshold)
+    by_market: dict[int, list[tuple[PriceObservation, Market]]] = {}
+    for observation, market_row in session.execute(statement).tuples().all():
+        by_market.setdefault(observation.market_id, []).append((observation, market_row))
+
+    flagged: list[FlaggedOut] = []
+    for rows in by_market.values():
+        points = [
+            Point(
+                observed_on=observation.observed_on,
+                average=observation.average,
+                low=observation.low,
+                high=observation.high,
+            )
+            for observation, _ in rows
+        ]
+        for (observation, market_row), flag in zip(rows, flag_series(points, config), strict=True):
+            if only_flagged and not (flag.is_anomaly or flag.is_impossible):
+                continue
+            flagged.append(
+                FlaggedOut(
+                    observed_on=flag.observed_on,
+                    commodity_slug=commodity,
+                    market_id=market_row.id,
+                    market=market_row.name,
+                    average=observation.average,
+                    low=observation.low,
+                    high=observation.high,
+                    # An infinite score is arithmetically true and useless to a reader, so it
+                    # travels as null with the explanation carried in `reason` instead.
+                    score=_finite(flag.score),
+                    is_anomaly=flag.is_anomaly,
+                    is_impossible=flag.is_impossible,
+                    reason=flag.reason,
+                )
+            )
+
+    flagged.sort(key=lambda item: (item.observed_on, item.market_id))
+    return Page(
+        items=flagged[offset : offset + limit],
+        total=len(flagged),
+        limit=limit,
+        offset=offset,
+    )
+
+
+def _finite(score: float | None) -> float | None:
+    """Return ``score`` unless it is infinite, which JSON cannot represent anyway."""
+    if score is None or score in (float("inf"), float("-inf")):
+        return None
+    return score
+
+
+@router.get("/meta/quality", response_model=Quality, tags=["meta"])
+def data_quality(session: Annotated[Session, Depends(get_session)]) -> Quality:
+    """What loaded, and what did not.
+
+    Public and deliberately unflattering. A page that only reports successes is not evidence
+    of anything, so the quarantine counts and the never-observed commodities sit beside the
+    row counts rather than behind them.
+    """
+    run_statement = (
+        select(
+            Source,
+            func.count(IngestionRun.id),
+            func.count(IngestionRun.id).filter(IngestionRun.status == "succeeded"),
+            func.count(IngestionRun.id).filter(IngestionRun.status == "failed"),
+            func.count(IngestionRun.id).filter(IngestionRun.status == "partial"),
+            func.max(IngestionRun.started_at),
+            func.max(IngestionRun.started_at).filter(IngestionRun.status == "succeeded"),
+            func.sum(IngestionRun.rows_upserted),
+            func.sum(IngestionRun.rows_quarantined),
+        )
+        # Outer, so a seeded source that has never run appears with zeroes rather than
+        # vanishing. "No run has ever happened" is the most important thing this page can
+        # say, and an inner join would hide exactly that.
+        .outerjoin(IngestionRun, IngestionRun.source_id == Source.id)
+        .group_by(Source.id)
+        .order_by(Source.slug)
+    )
+    sources = [
+        SourceQuality(
+            slug=source.slug,
+            name=source.name,
+            runs=runs,
+            succeeded=succeeded,
+            failed=failed,
+            partial=partial,
+            last_run_at=last_run,
+            last_success_at=last_success,
+            rows_upserted=upserted or 0,
+            rows_quarantined=quarantined or 0,
+        )
+        for (
+            source,
+            runs,
+            succeeded,
+            failed,
+            partial,
+            last_run,
+            last_success,
+            upserted,
+            quarantined,
+        ) in session.execute(run_statement).tuples()
+    ]
+
+    quarantine_statement = (
+        select(
+            QuarantinedRow.stage,
+            func.count(QuarantinedRow.id),
+            func.min(QuarantinedRow.reason),
+        )
+        .group_by(QuarantinedRow.stage)
+        .order_by(func.count(QuarantinedRow.id).desc())
+    )
+    quarantine = [
+        QuarantineCount(stage=stage, rows=rows, example_reason=reason)
+        for stage, rows, reason in session.execute(quarantine_statement).tuples()
+    ]
+
+    totals = session.execute(
+        select(
+            func.count(PriceObservation.id),
+            func.count(PriceObservation.id).filter(PriceObservation.unavailable.is_(True)),
+            func.count(PriceObservation.id).filter(
+                PriceObservation.average.is_not(None)
+                & (
+                    (PriceObservation.average < PriceObservation.low)
+                    | (PriceObservation.average > PriceObservation.high)
+                )
+            ),
+            func.min(PriceObservation.observed_on),
+            func.max(PriceObservation.observed_on),
+        )
+    ).one()
+
+    return Quality(
+        sources=sources,
+        quarantine=quarantine,
+        observations=totals[0] or 0,
+        unavailable=totals[1] or 0,
+        impossible=totals[2] or 0,
+        commodities_seeded=session.scalar(select(func.count()).select_from(Commodity)) or 0,
+        commodities_observed=session.scalar(
+            select(func.count(func.distinct(PriceObservation.commodity_id)))
+        )
+        or 0,
+        earliest_observed_on=totals[3],
+        latest_observed_on=totals[4],
+    )

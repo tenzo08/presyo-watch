@@ -86,6 +86,51 @@ export interface Mover {
   observations: number;
 }
 
+export interface SourceQuality {
+  slug: string;
+  name: string;
+  runs: number;
+  succeeded: number;
+  failed: number;
+  partial: number;
+  last_run_at: string | null;
+  last_success_at: string | null;
+  rows_upserted: number;
+  rows_quarantined: number;
+}
+
+export interface QuarantineCount {
+  stage: string;
+  rows: number;
+  example_reason: string | null;
+}
+
+export interface Quality {
+  sources: SourceQuality[];
+  quarantine: QuarantineCount[];
+  observations: number;
+  unavailable: number;
+  impossible: number;
+  commodities_seeded: number;
+  commodities_observed: number;
+  earliest_observed_on: string | null;
+  latest_observed_on: string | null;
+}
+
+export interface Flagged {
+  observed_on: string;
+  commodity_slug: string;
+  market_id: number;
+  market: string;
+  average: string | null;
+  low: string | null;
+  high: string | null;
+  score: number | null;
+  is_anomaly: boolean;
+  is_impossible: boolean;
+  reason: string | null;
+}
+
 export interface Source {
   slug: string;
   name: string;
@@ -158,6 +203,13 @@ export const api = {
     get<Page<Mover>>("/movers", params, signal),
 
   sources: (signal?: AbortSignal) => get<Source[]>("/meta/sources", {}, signal),
+
+  quality: (signal?: AbortSignal) => get<Quality>("/meta/quality", {}, signal),
+
+  anomalies: (
+    params: { commodity: string; date_from?: string; only_flagged?: boolean; limit?: number },
+    signal?: AbortSignal,
+  ) => get<Page<Flagged>>("/anomalies", params, signal),
 
   runs: (params: { limit?: number }, signal?: AbortSignal) =>
     get<Page<Run>>("/meta/runs", params, signal),

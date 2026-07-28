@@ -246,3 +246,87 @@ class MoverOut(BaseModel):
     observations: int = Field(
         description="How many days inside the window carried a figure. Two is the minimum."
     )
+
+
+class FlaggedOut(BaseModel):
+    """One observation, annotated. Nothing is removed — see `presyowatch.analytics`."""
+
+    observed_on: date
+    commodity_slug: str
+    market_id: int
+    market: str
+    average: Money
+    low: Money
+    high: Money
+    score: float | None = Field(
+        description=(
+            "Modified z-score against the surrounding median. Null when there were too few "
+            "neighbouring days to judge — three prices are not a distribution."
+        )
+    )
+    is_anomaly: bool = Field(
+        description="Unusual against its neighbours. Unusual is not the same as wrong."
+    )
+    is_impossible: bool = Field(
+        description=(
+            "Arithmetically self-contradictory — an average outside its own low-to-high "
+            "range. Certain rather than probable, and needs no threshold."
+        )
+    )
+    reason: str | None
+
+
+class SourceQuality(BaseModel):
+    """How one source's ingestion is actually going."""
+
+    slug: str
+    name: str
+    runs: int
+    succeeded: int
+    failed: int
+    partial: int
+    last_run_at: datetime | None
+    last_success_at: datetime | None
+    rows_upserted: int
+    rows_quarantined: int
+
+    @property
+    def success_rate(self) -> float | None:
+        return self.succeeded / self.runs if self.runs else None
+
+
+class QuarantineCount(BaseModel):
+    """How many rows are held at one stage, and the commonest reason."""
+
+    stage: str
+    rows: int
+    example_reason: str | None
+
+
+class Quality(BaseModel):
+    """The public data quality summary.
+
+    PLANNING.md calls observability a feature and this the single highest-signal thing a
+    reviewer sees. It is deliberately unflattering: it reports what did not load as
+    prominently as what did, because a dashboard that only shows successes is not evidence
+    of anything.
+    """
+
+    sources: list[SourceQuality]
+    quarantine: list[QuarantineCount]
+    observations: int
+    unavailable: int = Field(
+        description="Rows the source listed with no figures at all. Expected, not a fault."
+    )
+    impossible: int = Field(
+        description="Stored rows whose average falls outside their own low-to-high range."
+    )
+    commodities_seeded: int
+    commodities_observed: int = Field(
+        description=(
+            "How many seeded commodities have ever been observed. The gap is vocabulary that "
+            "exists in the seed but has never been monitored."
+        )
+    )
+    earliest_observed_on: date | None
+    latest_observed_on: date | None

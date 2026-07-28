@@ -74,14 +74,27 @@ localhost one.
 
 ## Phase 4 — Analytics (target: 2 weeks)
 
-- [ ] PSA OpenSTAT PxWeb API client — CPI / inflation series as a second source
-- [ ] Anomaly detection: rolling median + MAD, configurable window and threshold
-- [ ] Anomaly flags surfaced in the API and highlighted on charts
-- [ ] Seasonal ETS forecast with walk-forward backtest
+- [ ] PSA OpenSTAT PxWeb API client — CPI / inflation series as a second source.
+      **Not started.** Not blocked, just not reached.
+- [x] Anomaly detection: rolling median + MAD, configurable window and threshold
+      — plus a separate, non-statistical check for arithmetically impossible rows, which is
+      what actually catches the real Corn Cracked defect
+- [x] Anomaly flags surfaced in the API — `/anomalies`, with `window` and `threshold` as
+      query parameters so a reader who distrusts a flag can move the goalposts.
+      **Not yet highlighted on the chart** — the endpoint exists and nothing draws it.
+- [ ] Seasonal ETS forecast with walk-forward backtest.
+      **Deliberately not attempted yet — there is not enough history.** The oldest observation
+      in the corpus is January 2026 and daily coverage begins in July; a seasonal model needs
+      at least two full cycles to estimate a season at all. Fitting one now would produce a
+      confident line with nothing behind it, which is exactly the dishonesty PLANNING.md's
+      "honest analytics" principle exists to prevent. Revisit after roughly a year of runs.
 - [ ] Seasonal-naive baseline, MAE comparison, **displayed on the site even when the model
-      loses**
-- [ ] Public data quality page: ingestion success rate, null rate per commodity,
+      loses**. Blocked on the same missing history.
+- [x] Public data quality page: ingestion success rate, null rate per commodity,
       quarantine count, last-successful-run per source
+      — `/meta/quality` and `/quality`. A source that has never run appears with zeroes
+      rather than vanishing: an inner join would make "ingestion is broken" look identical to
+      "no data yet".
 
 ## Phase 5 — Polish (target: 1 week)
 
@@ -254,3 +267,12 @@ _(append new tasks here as they surface — do not silently expand scope in othe
       one concerns a Next *server*; this is a static export with no runtime. `postcss` is
       pinned forward because its advisories do touch the build. Revisit if the dashboard ever
       grows a server, at which point they all become real.
+- [ ] **Draw the anomaly flags on the chart.** `/anomalies` returns them and the dashboard
+      does not ask. A flagged point wants a ringed marker and a tooltip carrying the reason —
+      the marker specs are already in `web/app/globals.css`, and the palette's status colours
+      are reserved for exactly this.
+- [ ] **The 10% relative-deviation floor is a judgement, not a measurement.** Anomaly
+      flagging requires a value to clear both the z-score threshold *and* a 10% distance from
+      the local median, because without the floor a two-peso move against a tight cluster
+      scored 6.4 deviations and would have flooded the page. Ten percent was reasoned about,
+      not fitted. Once there is a year of data, check what it actually admits and rejects.

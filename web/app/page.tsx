@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { CommoditySearch } from "@/components/CommoditySearch";
 import { Footer } from "@/components/Footer";
 import { MoversTable } from "@/components/MoversTable";
@@ -122,6 +123,7 @@ export default function Dashboard() {
             taken from the Department of Agriculture&rsquo;s Bantay Presyo monitoring sheets.
           </p>
         </div>
+        <Link href="/quality">Data quality →</Link>
       </header>
 
       {cold ? <Waking /> : null}
