@@ -6,12 +6,17 @@ whitespace-fixing pre-commit hooks and from git's line-ending normalisation so t
 that way — ``www.da.gov.ph`` really does serve CRLF.
 """
 
-from collections.abc import Callable
+import os
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
 
 import pytest
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import Engine, create_engine, text
+from sqlalchemy.orm import Session, sessionmaker
 
 from presyowatch.sources.bantay_presyo import ParsedSheet, parse_sheet
 
@@ -123,3 +128,83 @@ def load_sheet(name: str) -> ParsedSheet:
     Safe to share because ``ParsedSheet`` is frozen.
     """
     return parse_sheet((PDF_FIXTURES / name).read_bytes())
+
+
+# -- the database -----------------------------------------------------------------
+#
+# Skipped unless `PRESYOWATCH_TEST_DATABASE_URL` points at a database this suite may freely
+# create and drop tables in. Phase 2 wires that into CI against a Neon branch; until then:
+#
+#     uv run --with pgserver python scripts/with_temp_postgres.py pytest tests -q
+#
+# The skip lives on the `engine` fixture rather than on each module's `pytestmark`, so a
+# test module cannot forget it — asking for a database is what makes a test need one.
+
+DATABASE_URL = os.environ.get("PRESYOWATCH_TEST_DATABASE_URL")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+@pytest.fixture(scope="session")
+def engine() -> Iterator[Engine]:
+    """A migrated, empty database, built once for the whole session.
+
+    **Built by running the migration, never by ``metadata.create_all``.** That distinction
+    matters more than it looks: `create_all` builds the schema from the models, so these
+    tests would pass against a schema no deployment has, and a migration that produced
+    something subtly different would go unnoticed.
+    """
+    if not DATABASE_URL:
+        pytest.skip("set PRESYOWATCH_TEST_DATABASE_URL to run tests against a real Postgres")
+
+    built = create_engine(DATABASE_URL, future=True)
+
+    # Start from genuinely nothing, whatever a previous run left behind. The skip above is
+    # the contract that this database may be wiped.
+    with built.begin() as connection:
+        connection.execute(text("DROP SCHEMA public CASCADE"))
+        connection.execute(text("CREATE SCHEMA public"))
+
+    config = Config(str(PROJECT_ROOT / "alembic.ini"))
+    # migrations/env.py takes the target from DATABASE_URL, deliberately not from the ini.
+    previous = os.environ.get("DATABASE_URL")
+    os.environ["DATABASE_URL"] = DATABASE_URL
+    try:
+        command.upgrade(config, "head")
+        yield built
+    finally:
+        if previous is None:
+            os.environ.pop("DATABASE_URL", None)
+        else:
+            os.environ["DATABASE_URL"] = previous
+        built.dispose()
+
+
+@pytest.fixture
+def session_factory(engine: Engine) -> Iterator[sessionmaker[Session]]:
+    """Sessions that all share one connection inside a transaction that is always rolled back.
+
+    ``join_transaction_mode="create_savepoint"`` lets the code under test commit — the
+    ingester commits once per file, and the idempotency tests need a rerun to see committed
+    state rather than its own uncommitted work — while the enclosing transaction is discarded
+    at teardown. So tests stay independent and the migrated schema is never rebuilt between
+    them.
+    """
+    connection = engine.connect()
+    transaction = connection.begin()
+    try:
+        yield sessionmaker(
+            bind=connection,
+            join_transaction_mode="create_savepoint",
+            expire_on_commit=False,
+            future=True,
+        )
+    finally:
+        transaction.rollback()
+        connection.close()
+
+
+@pytest.fixture
+def session(session_factory: sessionmaker[Session]) -> Iterator[Session]:
+    """A session on the same connection as ``session_factory``, for setup and assertions."""
+    with session_factory() as opened:
+        yield opened

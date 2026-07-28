@@ -121,6 +121,10 @@ convention = "google"
 # one carries a distinct reason for quarantine; collapsing them into nested branches to
 # satisfy a counter would make the failure paths harder to follow, not easier.
 max-returns = 8
+# The ingester's entry points wire together a source, a cache, two resolvers and a clock.
+# Every one of them is keyword-only and injected so that a run is reproducible and testable
+# without a network; bundling them into a config object would hide that, not simplify it.
+max-args = 10
 
 # ---------------------------------------------------------------------------
 # mypy — strict, per CLAUDE.md § Style

@@ -52,6 +52,7 @@ from typing import Any, Final
 import pdfplumber
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from presyowatch.db.models import QuarantinedRow
 from presyowatch.log import get_logger
 from presyowatch.sources.dates import read_date
 
@@ -229,6 +230,28 @@ class ParsedSheet:
     def unavailable_count(self) -> int:
         """Commodities listed but not monitored. A data quality figure, not an error."""
         return sum(1 for row in self.rows if row.unavailable)
+
+
+def to_quarantine_row(
+    rejected: RejectedRow,
+    *,
+    source_id: int | None = None,
+    run_id: str | None = None,
+    source_file_sha256: str | None = None,
+) -> QuarantinedRow:
+    """Turn a rejected table row into a record for the quarantine table.
+
+    The raw cells are kept exactly as extracted, so the row can be reprocessed from
+    quarantine once the parser improves, without going back to the file.
+    """
+    return QuarantinedRow(
+        source_id=source_id,
+        run_id=run_id,
+        stage="parse",
+        reason=rejected.reason,
+        source_file_sha256=source_file_sha256,
+        payload={"cells": list(rejected.cells), "group": rejected.group},
+    )
 
 
 def _collapse(text: str | None) -> str:
