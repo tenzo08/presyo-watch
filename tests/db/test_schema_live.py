@@ -1,128 +1,30 @@
 """Schema behaviour against a real Postgres.
 
-Skipped unless ``PRESYOWATCH_TEST_DATABASE_URL`` points at a database this module may
-freely create and drop tables in. Phase 2 wires this into CI against a Neon branch; until
-then it is run locally.
+Skipped unless ``PRESYOWATCH_TEST_DATABASE_URL`` is set; see ``tests/db/conftest.py``,
+which owns the migrated database and the transaction each test runs in.
 
 These assert what only a live server can: that the migration applies, that the models have
 not drifted from it, and that the check constraints actually reject bad rows rather than
 merely being declared.
-
-Run with an embedded throwaway server:
-
-    uv run --with pgserver python -c "
-    import pgserver, os, subprocess, sys
-    s = pgserver.get_server('.pgdata')
-    os.environ['PRESYOWATCH_TEST_DATABASE_URL'] = s.get_uri().replace(
-        'postgresql://', 'postgresql+psycopg://')
-    sys.exit(subprocess.call([sys.executable, '-m', 'pytest', 'tests/db', '-q']))"
 """
 
-import os
-from collections.abc import Iterator
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from pathlib import Path
 
 import pytest
-from alembic import command
-from alembic.config import Config
-from sqlalchemy import Engine, create_engine, select, text
+from sqlalchemy import Engine, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from presyowatch.db.models import (
-    Commodity,
-    Market,
-    PriceObservation,
-    Region,
-    Source,
-)
-
-DATABASE_URL = os.environ.get("PRESYOWATCH_TEST_DATABASE_URL")
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
-pytestmark = pytest.mark.skipif(
-    not DATABASE_URL,
-    reason="set PRESYOWATCH_TEST_DATABASE_URL to run schema tests against a real Postgres",
-)
-
-
-@pytest.fixture(scope="module")
-def engine() -> Iterator[Engine]:
-    """Build the schema by running the migration, not by ``metadata.create_all``.
-
-    This matters more than it looks. ``create_all`` builds the schema from the models,
-    so tests using it would pass against a schema that no deployment ever has, and a
-    migration that produced something subtly different would go unnoticed. Migrating
-    means every assertion below is made against the schema that actually ships.
-    """
-    assert DATABASE_URL is not None
-    built = create_engine(DATABASE_URL, future=True)
-
-    # Start from genuinely nothing, whatever a previous run left behind. The skip guard
-    # above is the contract that this database may be wiped.
-    with built.begin() as connection:
-        connection.execute(text("DROP SCHEMA public CASCADE"))
-        connection.execute(text("CREATE SCHEMA public"))
-
-    config = Config(str(PROJECT_ROOT / "alembic.ini"))
-    # migrations/env.py takes the target from DATABASE_URL, deliberately not from the ini.
-    previous = os.environ.get("DATABASE_URL")
-    os.environ["DATABASE_URL"] = DATABASE_URL
-    try:
-        command.upgrade(config, "head")
-        yield built
-    finally:
-        if previous is None:
-            os.environ.pop("DATABASE_URL", None)
-        else:
-            os.environ["DATABASE_URL"] = previous
-        built.dispose()
+from presyowatch.db.models import Market, PriceObservation
 
 
 def test_the_schema_under_test_came_from_the_migration(engine: Engine) -> None:
-    """Proves the fixture above migrated rather than silently creating from models."""
+    """Proves the fixture migrated rather than silently creating from the models."""
     with engine.connect() as connection:
         version = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
 
     assert version, "alembic_version is empty, so no migration ran"
-
-
-@pytest.fixture
-def session(engine: Engine) -> Iterator[Session]:
-    with Session(engine) as opened:
-        yield opened
-        opened.rollback()
-
-
-@pytest.fixture
-def seeded(session: Session) -> tuple[int, int, int]:
-    """Insert the minimum referenced rows and return their ids."""
-    region = Region(psgc_code="160000000", name="Caraga", level="region")
-    source = Source(
-        slug="da-caraga",
-        name="DA Regional Field Office XIII (Caraga)",
-        base_url="https://caraga.da.gov.ph",
-        attribution_text="Department of Agriculture RFO XIII (Caraga)",
-    )
-    commodity = Commodity(
-        canonical_slug="rice-premium",
-        group="IMPORTED COMMERCIAL RICE",
-        name="Premium",
-        specification="5% Broken",
-        unit="kg",
-    )
-    session.add_all([region, source, commodity])
-    session.flush()
-    market = Market(
-        region_psgc_code=region.psgc_code,
-        name="Luha Public Market",
-        municipality="Tandag City",
-    )
-    session.add(market)
-    session.flush()
-    return source.id, market.id, commodity.id
 
 
 def observation(ids: tuple[int, int, int], **overrides: object) -> PriceObservation:

@@ -24,7 +24,7 @@ localhost one.
 - [x] `pdfplumber` parser producing validated Pydantic rows; group labels from positional
       extraction, blanks as NULL + `unavailable` flag, unit normalization
 - [x] Commodity alias table + resolver; unmapped names quarantined, never guessed
-- [ ] Idempotent upsert on the natural key; `Revised-` files update in place and append to
+- [x] Idempotent upsert on the natural key; `Revised-` files update in place and append to
       `observation_revisions`
 - [ ] Backfill runner over a date range; `ingestion_runs` row per source per run
 - [ ] Fixture corpus: commit ~10 real PDFs including at least one revised file, one with
@@ -155,3 +155,18 @@ _(append new tasks here as they surface — do not silently expand scope in othe
       its markets have `regions` rows. Probably an Alembic data migration or a seed command.
 - [ ] **Wire `PRESYOWATCH_TEST_DATABASE_URL` into CI** (Phase 2) so `tests/db` stops being
       skipped there. Locally it runs via the helper script above.
+- [ ] **The backfill runner must ingest a date's files in index order.** `upsert_observations`
+      is last-write-wins by design — it compares figures, not filenames — so feeding it a
+      `Revised-` sheet *before* the original would record the original as the correction.
+      Nothing in the upsert can tell which of two files was published first; the runner has to
+      preserve the index's order.
+- [ ] **Quarantine `UpsertOutcome.conflicts`.** When two raw rows on one sheet resolve to the
+      same commodity with different figures, neither is written and the pair comes back with a
+      ready-made `reason`. Nothing writes them to `quarantine` (stage `validate`) yet, so today
+      they would be dropped silently — which is exactly what CLAUDE.md forbids. Belongs with
+      the backfill runner.
+- [ ] **Reconsider the revision model if a source ever revises a *deletion*.** A commodity that
+      vanishes from a corrected sheet is currently invisible: the upsert only ever sees rows
+      that are present, so the stale observation stays as published. Publishing a row as
+      `unavailable` is handled; removing it entirely is not, and it is not yet known whether
+      the DA does that.

@@ -61,8 +61,8 @@ Philippines. Full attribution is a condition of use, not a courtesy.
   national portal and regional field offices.
 
 Automated collection respects `robots.txt` on a per-host basis. `www.da.gov.ph`
-disallows automated access to its uploads directory, so national PDFs are **not**
-fetched automatically. See [`KNOWLEDGE.md`](KNOWLEDGE.md) for the verified position on
+disallows every PDF on the host (`Disallow: /*.pdf$`), so national PDFs are **not**
+fetched automatically, wherever they are served from. See [`KNOWLEDGE.md`](KNOWLEDGE.md) for the verified position on
 each host and the legal basis under RA 8293 §§ 175–176.
 
 Prices shown are as published by the source agency. This project does not correct,
