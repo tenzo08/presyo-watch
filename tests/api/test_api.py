@@ -443,3 +443,39 @@ def test_movers_names_the_market_rather_than_averaging_across_them(
 
     assert top["market"] == "Luha Public Market"
     assert top["municipality"] == "Tandag City"
+
+
+# -- cross-origin access ----------------------------------------------------------
+
+
+def test_a_browser_on_another_origin_is_allowed_to_read(client: TestClient) -> None:
+    """Without this the dashboard gets nothing but CORS errors, silently and completely.
+
+    The data is public and the API is read-only, so there is no reason to restrict origins
+    and a good reason not to: anyone may use this data, and the dashboard is only the first
+    caller to try.
+    """
+    response = client.get("/health", headers={"Origin": "https://presyowatch.pages.dev"})
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "*"
+
+
+def test_the_preflight_a_browser_actually_sends_is_answered(client: TestClient) -> None:
+    response = client.options(
+        "/observations",
+        headers={
+            "Origin": "https://presyowatch.pages.dev",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "*"
+
+
+def test_credentials_are_not_allowed_alongside_the_wildcard(client: TestClient) -> None:
+    """Pairing them is forbidden by the CORS spec, and is what would make `*` unsafe."""
+    response = client.get("/health", headers={"Origin": "https://example.invalid"})
+
+    assert "access-control-allow-credentials" not in response.headers

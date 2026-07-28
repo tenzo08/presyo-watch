@@ -10,6 +10,9 @@ exactly that; what this module adds is making sure there is only ever one of it.
 settings and the engine all arrive as parameters, so the tests drive the real application
 over the real routes against a real Postgres, with nothing patched.
 
+**CORS is wide open, on purpose.** See the middleware below: the data is public, the API is
+read-only, and nothing it serves is worth protecting from another origin.
+
 **There is deliberately no module-level ``app``.** Importing this module must not require a
 database URL, or the linter, the tests and ``--help`` would all fail on a missing
 environment variable. Deployments name the factory instead::
@@ -22,6 +25,7 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session
 
@@ -94,6 +98,24 @@ def create_app(
         docs_url="/docs",
         redoc_url=None,
     )
+    # Any origin, GET only, no credentials.
+    #
+    # This is a public, read-only, unauthenticated API over public government data. There is
+    # no cookie, no session and no header worth stealing, so the usual reason to restrict
+    # origins does not exist here — and restricting them would break the premise, which is
+    # that anyone may use this data. The dashboard is simply the first such caller.
+    #
+    # `allow_credentials` stays False deliberately: the CORS spec forbids pairing it with a
+    # wildcard origin, and turning it on would be the change that makes the wildcard unsafe.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["GET"],
+        allow_headers=["*"],
+        max_age=86400,
+    )
+
     app.state.engine = built
     app.state.session_factory = factory
     app.include_router(router)
