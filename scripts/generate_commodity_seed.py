@@ -50,7 +50,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from presyowatch.commodities import alias_key
-from presyowatch.sources.bantay_presyo import parse_sheet
+from presyowatch.sources.bantay_presyo import ParsedSheet, SheetParseError, parse_sheet
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "tests" / "fixtures" / "pdf"
@@ -68,10 +68,26 @@ def slugify(*parts: str) -> str:
     return slug[:SLUG_MAX].rstrip("-")
 
 
+def read_fixtures() -> dict[str, ParsedSheet]:
+    """Parse every committed fixture, reporting and skipping the ones that cannot be read.
+
+    The corpus deliberately includes sheets the parser rejects, so that the failure is
+    exercised. They contribute no vocabulary and must not count towards the attestation
+    threshold, which is a fraction of the sheets actually read.
+    """
+    sheets: dict[str, ParsedSheet] = {}
+    for path in sorted(FIXTURES.glob("*.pdf")):
+        try:
+            sheets[path.name] = parse_sheet(path.read_bytes())
+        except SheetParseError as exc:
+            print(f"  - skipped {path.name}: {exc.reason}")
+    return sheets
+
+
 def main() -> int:
-    sheets = {path.name: parse_sheet(path.read_bytes()) for path in sorted(FIXTURES.glob("*.pdf"))}
+    sheets = read_fixtures()
     if not sheets:
-        print("no fixtures found", file=sys.stderr)
+        print("no readable fixtures found", file=sys.stderr)
         return 1
 
     seen_in: dict[tuple[str, str, str | None], set[str]] = defaultdict(set)

@@ -1,8 +1,13 @@
 """Tests for the Bantay Presyo PDF parser.
 
-Runs against four real sheets fetched from ``caraga.da.gov.ph`` on 2026-07-28 and committed
-byte-exact: four different markets across four provinces, one of them with a typo'd year in
-its filename and one with a collapsed table row. Synthetic PDFs would exercise none of that.
+Runs against twelve real sheets fetched from ``caraga.da.gov.ph`` and committed byte-exact —
+seven markets across five provinces — plus one the parser deliberately cannot read.
+``tests/conftest.py`` documents what is wrong with each. Synthetic PDFs would exercise none
+of it.
+
+Widening this corpus from four sheets to twelve found two real bugs, both on the five-page
+``Mayor-Salvador-Calo-July-23-2026.xlsx.pdf``, and both caught by the cross-sheet agreement
+check at the bottom of this file rather than by anything anyone thought to assert.
 
 The pure inner functions are also tested directly. ``parse_header`` takes text and
 ``read_body`` takes extracted cells, so the branch behaviour — forward filling a group,
@@ -10,6 +15,7 @@ rejecting an unreadable cell — can be asserted without hand-building a PDF, wh
 the dependency set can do.
 """
 
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
@@ -23,12 +29,13 @@ from presyowatch.sources.bantay_presyo import (
     RejectedRow,
     SheetParseError,
     _extract_rows,
+    _field_for,
     _parse_header,
     _read_body,
     normalise_unit,
     parse_sheet,
 )
-from tests.conftest import load_sheet
+from tests.conftest import SHEET_NAMES, UNREADABLE_SHEET_NAME, load_sheet
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "pdf"
 
@@ -36,7 +43,13 @@ CABADBARAN = "Cabadbaran-City-Public-Market_June-24-2026.pdf"
 LUHA = "Luha-Public-Market.xlsx-July-28-2026.pdf"
 MAYOR_CALO = "Mayor-Salvador-Calo-July-19-2029.pdf"
 SAN_JOSE = "San-Jose-Public-Market_July-28-2026.pdf"
-ALL_SHEETS = (CABADBARAN, LUHA, MAYOR_CALO, SAN_JOSE)
+SURIGAO = "Surigao-City-Public-Market.xlsx-July-24-2026.pdf"
+LIBERTAD_TRUNCATED = "Libertad-Public-Market-July-22-2026.pdf"
+LIBERTAD_OLD = "Libertad-Public-Market_Jan-07-2025.pdf"
+REPEATED_HEADER = "Mayor-Salvador-Calo-July-23-2026.xlsx.pdf"
+TWO_PAGE = "July-2026.xlsx-July-24.pdf"
+REPUBLISHED = ("ADS-April-23-2026.pdf", "SanFracisco-April-23-2026.pdf")
+ALL_SHEETS = SHEET_NAMES
 
 HEADER_ROW: tuple[str | None, ...] = (
     "Commodity Group",
@@ -186,9 +199,15 @@ def test_every_row_belongs_to_a_group(cabadbaran: ParsedSheet) -> None:
 
 
 @pytest.mark.parametrize("name", ALL_SHEETS)
-def test_all_twenty_one_groups_are_found(name: str) -> None:
-    """Every sheet carries the same 21 groups; a drop would mean the fill broke."""
-    assert len({row.group for row in load(name).rows}) == 21
+def test_every_sheet_carries_the_full_set_of_groups(name: str) -> None:
+    """21 groups, or 20 on the oldest sheet — which genuinely has no LEGUMES section.
+
+    Verified against its raw text: the word does not appear. A drop below that would mean
+    the forward fill broke and a block was absorbed into its neighbour.
+    """
+    expected = 20 if name == LIBERTAD_OLD else 21
+
+    assert len({row.group for row in load(name).rows}) == expected
 
 
 def test_a_group_carries_forward_across_a_page_boundary() -> None:
@@ -415,7 +434,7 @@ def test_a_sheet_yields_around_150_rows(name: str) -> None:
     sheet = load(name)
 
     assert 140 <= len(sheet.rows) <= 170
-    assert sheet.page_count >= 3
+    assert sheet.page_count >= 2
 
 
 def test_the_footer_note_is_not_a_data_row(cabadbaran: ParsedSheet) -> None:
@@ -699,3 +718,173 @@ def test_an_empty_heading_mid_page_belongs_to_the_block_that_follows() -> None:
     by_commodity = {row.commodity: row.group for row in rows}
     assert by_commodity["Avocado"] == "FRUITS"
     assert by_commodity["Sweet Pepper"] == "SPICES"
+
+
+# -- the sheet's own metadata, mistaken for data ----------------------------------
+#
+# Most sheets extract their header block as one tall cell that never reaches the body. The
+# five-page `Mayor-Salvador-Calo-July-23-2026.xlsx.pdf` repeats the block on every page and
+# extracts it one line per row, split across the first two columns as
+# `Province | : Agusan Del Norte`. That looks exactly like a commodity row carrying a group
+# heading, and treating it as one broke two unrelated things on that sheet.
+
+
+def test_a_repeated_header_block_never_becomes_a_commodity_group() -> None:
+    """Seven highland vegetables were filed under a group called `Province`."""
+    groups = {row.group for row in load(REPEATED_HEADER).rows}
+
+    assert "Province" not in groups
+    assert not any(_field_for(group) for group in groups)
+
+
+def test_a_repeated_header_block_is_not_a_rejected_row_either() -> None:
+    """It is not a commodity row that went wrong; it is not a commodity row.
+
+    Quarantining it would inflate the failure count on the data quality page with rows the
+    source never intended as data.
+    """
+    sheet = load(REPEATED_HEADER)
+
+    assert sheet.rejected == ()
+    assert not any(row.commodity.startswith(":") for row in sheet.rows)
+
+
+def test_a_block_split_by_a_page_break_survives_a_repeated_header() -> None:
+    """`Cooking Oil (Coconut)` opens page 4 below a repeated header block.
+
+    It is the first *data* row of that page, so it continues OTHER BASIC COMMODITIES. The
+    header block's own blank rows have an empty group cell too, and letting one of those
+    reach forward for the next heading moved this row into LIVESTOCK & POULTRY FEEDS.
+    """
+    rows = [row for row in load(REPEATED_HEADER).rows if row.commodity == "Cooking Oil (Coconut)"]
+
+    assert len(rows) == 2
+    assert {row.group for row in rows} == {"OTHER BASIC COMMODITIES"}
+
+
+def test_a_blank_row_in_a_header_block_does_not_reach_for_the_next_heading() -> None:
+    """The rule in miniature: only a commodity row can be the split half of a heading."""
+    rows, _ = _read_body(
+        [
+            HEADER_ROW,
+            data_row("Sugar (Brown)", group="OTHER BASIC COMMODITIES", average="80.00"),
+            # page break, header block repeated: blank rows whose group cell is "" too
+            ("", "", "", "", "", "", "", ""),
+            ("Province", ": Agusan Del Norte", "", "", "", "", "", ""),
+            HEADER_ROW,
+            data_row("Cacao Beans", group="", average="200.00"),
+            data_row("Hog Booster", group="LIVESTOCK & POULTRY FEEDS", average="1500.00"),
+        ],
+        [0, 0, 1, 1, 1, 1, 1],
+    )
+
+    by_commodity = {row.commodity: row.group for row in rows}
+    assert by_commodity["Cacao Beans"] == "OTHER BASIC COMMODITIES"
+    assert by_commodity["Hog Booster"] == "LIVESTOCK & POULTRY FEEDS"
+
+
+# -- header labels the source truncated ------------------------------------------
+
+
+def test_labels_clipped_by_the_source_are_still_read() -> None:
+    """`Libertad-Public-Market-July-22-2026.pdf` reads `Municipality/Ci: Butuan City`.
+
+    The spreadsheet column was too narrow and the export clipped the label, not the value.
+    Quarantining a sheet whose data is complete over a printing artefact would be losing
+    real data to fussiness.
+    """
+    header = load(LIBERTAD_TRUNCATED).header
+
+    assert header.province == "Agusan Del Norte"
+    assert header.municipality == "Butuan City"
+    assert header.market == "Libertad Public Market"
+    assert header.observed_on.isoformat() == "2026-07-22"
+
+
+def test_a_truncated_label_is_matched_by_prefix() -> None:
+    assert _field_for("Municipality/Ci") == "municipality"
+    assert _field_for("Date of Monitor") == "observed_on"
+    assert _field_for("Province") == "province"
+
+
+def test_a_stub_too_short_to_identify_a_label_is_refused() -> None:
+    """Better an unreadable sheet than a field read off three characters."""
+    assert _field_for("Mun") is None
+    assert _field_for("") is None
+
+
+def test_something_that_is_not_a_header_label_is_not_one() -> None:
+    assert _field_for("Commodity Group") is None
+    assert _field_for("Note") is None
+
+
+def test_the_first_occurrence_of_a_repeated_label_wins() -> None:
+    """Sheets that repeat the block on every page must be read from the first page."""
+    header = _parse_header(
+        "Province : Agusan del Norte\n"
+        "Municipality/City : Cabadbaran City\n"
+        "Market Monitored : Cabadbaran City Public Market\n"
+        "Date of Monitoring : June 24, 2026\n"
+        "Province : Somewhere Else\n"
+        "Date of Monitoring : June 25, 2026\n"
+    )
+
+    assert header.province == "Agusan del Norte"
+    assert header.observed_on.isoformat() == "2026-06-24"
+
+
+# -- a layout the parser refuses --------------------------------------------------
+
+
+def test_a_seven_column_sheet_is_quarantined_whole() -> None:
+    """One real sheet omits the Specifications column entirely.
+
+    Reading it anyway would shift every price one column left. Supporting the layout is a
+    real decision — it changes what identifies a commodity — so the file is quarantined and
+    the decision is left to a human rather than taken by the parser.
+    """
+    body = (FIXTURES / UNREADABLE_SHEET_NAME).read_bytes()
+
+    with pytest.raises(SheetParseError, match="no column header row"):
+        parse_sheet(body)
+
+
+# -- the same sheet published twice ----------------------------------------------
+
+
+def test_a_sheet_republished_under_two_urls_is_byte_identical() -> None:
+    """Caraga published one San Francisco sheet under two names, one of them misspelled.
+
+    This is why the raw cache is content-addressed: two URLs, one blob. It is also why the
+    upsert compares figures rather than filenames — neither of these is a correction.
+    """
+    first, second = ((FIXTURES / name).read_bytes() for name in REPUBLISHED)
+
+    assert first == second
+
+
+def test_a_republished_sheet_parses_to_the_same_observations() -> None:
+    left, right = (load(name) for name in REPUBLISHED)
+
+    assert left.header == right.header
+    assert left.rows == right.rows
+
+
+# -- the filename disagrees with the sheet, in both directions --------------------
+
+
+def test_an_older_sheet_also_disagrees_with_its_filename() -> None:
+    """`Libertad-Public-Market_Jan-07-2025.pdf` says `Date of Monitoring : January 7, 2026`.
+
+    The 2029 sheet is not a one-off. A January file carrying the previous year in its name
+    is the ordinary new-year slip, and it is the second piece of evidence that the index
+    date is provisional and the header is authoritative.
+    """
+    assert load(LIBERTAD_OLD).header.observed_on.isoformat() == "2026-01-07"
+    assert "Jan-07-2025" in LIBERTAD_OLD
+
+
+def test_no_sheet_is_read_as_a_date_in_the_future() -> None:
+    """Every header date lands in the past, including the file whose filename says 2029."""
+    for name in ALL_SHEETS:
+        assert load(name).header.observed_on <= date(2026, 7, 28)

@@ -118,12 +118,30 @@ _UNIT_ALIASES: Final = {
 Unrecognised units are kept verbatim rather than dropped — an unknown unit is still data,
 and mapping it is the commodity resolver's job, not the PDF reader's."""
 
-_HEADER_FIELDS: Final = {
-    "province": re.compile(r"^\s*Province\s*:\s*(?P<value>.+?)\s*$", re.MULTILINE),
-    "municipality": re.compile(r"^\s*Municipality/City\s*:\s*(?P<value>.+?)\s*$", re.MULTILINE),
-    "market": re.compile(r"^\s*Market Monitored\s*:\s*(?P<value>.+?)\s*$", re.MULTILINE),
-    "observed_on": re.compile(r"^\s*Date of Monitoring\s*:\s*(?P<value>.+?)\s*$", re.MULTILINE),
+_HEADER_LABELS: Final = {
+    "province": "Province",
+    "municipality": "Municipality/City",
+    "market": "Market Monitored",
+    "observed_on": "Date of Monitoring",
 }
+"""The header block's labels, in full.
+
+Matched by *prefix*, because the source truncates them. ``Libertad-Public-Market-July-22-
+2026.pdf`` really does read ``Municipality/Ci: Butuan City`` / ``Market Monitor: Libertad
+Public Market`` / ``Date of Monitor: July 22, 2026`` — the spreadsheet column was too narrow
+and the export clipped the label, not the value. Requiring the full label would quarantine a
+sheet whose data is complete and unambiguous, over a cosmetic artefact of how it was printed.
+"""
+
+_MIN_LABEL_PREFIX: Final = 6
+"""How much of a label must survive truncation to be recognised.
+
+Six characters keeps every pair of labels distinguishable — ``Munici`` and ``Market`` are
+already unambiguous — while refusing to guess from a stub. A prefix matching more than one
+label is treated as no match at all rather than resolved by order.
+"""
+
+_LABELLED_LINE = re.compile(r"^\s*(?P<label>[^:\n]{3,40}?)\s*:\s*(?P<value>.+?)\s*$", re.MULTILINE)
 
 _FOOTER_NOTE = re.compile(r"^\s*note\s*:", re.IGNORECASE)
 _THOUSANDS = re.compile(r",")
@@ -248,6 +266,21 @@ def _read_amount(cell: str | None) -> tuple[Decimal | None, str | None]:
     return Decimal(text), None
 
 
+def _field_for(label: str) -> str | None:
+    """Return the header field a possibly-truncated ``label`` names.
+
+    Ambiguity is not resolved, it is refused: a prefix shared by two labels returns
+    ``None``, so the sheet is quarantined with a reason rather than filed under a guess.
+    """
+    key = _collapse(label).casefold()
+    if len(key) < _MIN_LABEL_PREFIX:
+        return None
+    matched = [
+        field for field, canonical in _HEADER_LABELS.items() if canonical.casefold().startswith(key)
+    ]
+    return matched[0] if len(matched) == 1 else None
+
+
 def _parse_header(text: str) -> SheetHeader:
     """Read the province, municipality, market, and date from a page's text.
 
@@ -255,12 +288,17 @@ def _parse_header(text: str) -> SheetHeader:
         SheetParseError: If any field is missing or the date cannot be read.
     """
     found: dict[str, str] = {}
-    for field, pattern in _HEADER_FIELDS.items():
-        match = pattern.search(text)
-        if match is None:
+    for match in _LABELLED_LINE.finditer(text):
+        field = _field_for(match.group("label"))
+        # First occurrence wins: sheets that repeat the header block on every page would
+        # otherwise have their metadata read from the last page rather than the first.
+        if field is not None and field not in found:
+            found[field] = _collapse(match.group("value"))
+
+    for field in _HEADER_LABELS:
+        if field not in found:
             msg = f"sheet header has no {field!r} line"
             raise SheetParseError(msg)
-        found[field] = _collapse(match.group("value"))
 
     reading = read_date(found["observed_on"])
     if reading.value is None:
@@ -363,6 +401,24 @@ def parse_sheet(pdf_bytes: bytes) -> ParsedSheet:
     )
 
 
+def _is_header_block_line(cells: tuple[str | None, ...]) -> bool:
+    """Return whether this row is one line of the sheet's own metadata block.
+
+    On most sheets the block above the table extracts as a single tall cell and never
+    reaches here. On the five-page ``Mayor-Salvador-Calo-July-23-2026.xlsx.pdf`` it does not:
+    the block is repeated on every page and each line lands in its own row, split across the
+    first two columns as ``Province`` / ``: Agusan Del Norte``. That row looks exactly like a
+    commodity row carrying a group heading, and treating it as one caused two distinct
+    failures on that sheet — seven highland vegetables filed under a group called
+    ``Province``, and ``Cooking Oil (Coconut)`` losing its place as the first data row of a
+    page and so taking the *next* heading instead of continuing its own block.
+
+    Recognised through :func:`_field_for`, so the same knowledge that reads the header block
+    is what keeps it out of the body, truncated labels included.
+    """
+    return _field_for(_collapse(cells[_GROUP])) is not None if cells else False
+
+
 def _is_data_row(cells: tuple[str | None, ...]) -> bool:
     """Return whether this row describes a commodity.
 
@@ -371,7 +427,7 @@ def _is_data_row(cells: tuple[str | None, ...]) -> bool:
     """
     if len(cells) < len(EXPECTED_COLUMNS) or _is_column_header(cells):
         return False
-    if _FOOTER_NOTE.match(_collapse(cells[_GROUP])):
+    if _FOOTER_NOTE.match(_collapse(cells[_GROUP])) or _is_header_block_line(cells):
         return False
     return bool(_collapse(cells[_COMMODITY]))
 
@@ -441,7 +497,11 @@ def _group_per_row(
         label = labels[index]
         if label:
             current = label
-        elif _has_empty_group_cell(cells) and index not in opens_a_page:
+        elif _is_data_row(cells) and _has_empty_group_cell(cells) and index not in opens_a_page:
+            # Only a commodity row can be the split half of a heading. The repeated header
+            # block contains blank rows whose group cell is also `""`, and letting one of
+            # those reach forward for the next heading moved `Cooking Oil (Coconut)` from
+            # OTHER BASIC COMMODITIES into LIVESTOCK & POULTRY FEEDS on one sheet.
             current = upcoming[index] or current
         resolved.append(current)
     return resolved
@@ -494,6 +554,11 @@ def _read_body(
 
         if _FOOTER_NOTE.match(label):
             # The "blank means not available" note is itself a row of the table.
+            continue
+        if _is_header_block_line(cells):
+            # `Province | : Agusan Del Norte` — the sheet's own metadata, repeated on every
+            # page and split across the first two columns. Skipped rather than rejected:
+            # it is not a commodity row that went wrong, it is not a commodity row.
             continue
         if not commodity:
             # The header block, or an empty row produced by stray ruling lines.

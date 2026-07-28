@@ -318,9 +318,16 @@ def test_every_seeded_commodity_resolves_its_own_triple() -> None:
 
 
 def test_most_real_rows_resolve() -> None:
-    """About 96% of rows across the four sheets resolve; the rest are known artefacts.
+    """About 87% of rows across the twelve sheets resolve unattended.
 
-    A drop here means either the seed went stale or the parser changed what it emits.
+    That is *down* from 96% on the original four, and the drop is the corpus telling the
+    truth rather than a regression. Two of the added sheets use a different vocabulary for
+    the same products — ``Well-Milled`` for ``Well Milled``, ``Special (blue tag)``,
+    ``Bangus | Large`` for ``Bangus, Large`` — and each of those is an alias a person has to
+    write. Guessing them is exactly what :mod:`presyowatch.commodities` refuses to do, so
+    they quarantine until curated.
+
+    A drop below this floor means the seed went stale or the parser changed what it emits.
     """
     resolver = CommodityResolver.from_seed()
     total = resolved = 0
@@ -329,8 +336,8 @@ def test_most_real_rows_resolve() -> None:
             total += 1
             resolved += resolver.resolve(row).resolved
 
-    assert total > 500
-    assert resolved / total > 0.93, f"only {resolved}/{total} resolved"
+    assert total > 1500
+    assert resolved / total > 0.85, f"only {resolved}/{total} resolved"
 
 
 def test_every_unresolved_real_row_can_be_quarantined() -> None:

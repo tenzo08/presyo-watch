@@ -15,10 +15,7 @@ fish-alumahan-indian-mackerel-medium-4-6-pcs-kg,FISH,Alumahan (Indian Mackerel),
 fish-bangus-large-large-1-2-pcs,FISH,"Bangus, Large",Large (1-2 pcs),kg
 fish-bangus-medium-medium-3-4-pcs-kg,FISH,"Bangus, Medium",Medium (3-4 pcs/kg),kg
 fish-bonito-frigate-tuna,FISH,Bonito (Frigate Tuna),,kg
-fish-galunggong-imported-male-medium-12-14-pcs-kg,FISH,"Galunggong, Imported","Male, Medium (12-14 pcs/kg)",kg
-fish-galunggong-local-male-medium-12-14-pcs-kg,FISH,"Galunggong, Local","Male, Medium (12-14 pcs/kg)",kg
 fish-salmon-head-imported,FISH,"Salmon Head, Imported",,kg
-fish-salmon-head-local,FISH,"Salmon Head, Local",,kg
 fish-sardines-tamban,FISH,Sardines (Tamban),,kg
 fish-squid-pusit-bisaya-local-medium,FISH,"Squid (Pusit Bisaya), Local",Medium,kg
 fish-tambakol-yellow-fin-tuna-local-medium-fresh-or-chilled,FISH,"Tambakol (Yellow-Fin Tuna), Local","Medium, Fresh or Chilled",kg
@@ -30,26 +27,23 @@ fruits-banana-saba,FRUITS,Banana (Saba),,kg
 fruits-calamansi,FRUITS,Calamansi,,kg
 fruits-mango-carabao-ripe-3-4-pcs-kg,FRUITS,Mango (Carabao),"Ripe, 3-4 pcs/kg",kg
 fruits-melon,FRUITS,Melon,,kg
-fruits-papaya-solo-ripe-2-3-pcs-kg,FRUITS,Papaya,"Solo, Ripe, 2-3 pcs/kg",kg
+fruits-papaya-solo-ripe,FRUITS,Papaya,"Solo, Ripe",kg
 fruits-pomelo,FRUITS,Pomelo,,kg
 fruits-watermelon,FRUITS,Watermelon,,kg
 fungicide-antracol,FUNGICIDE,Antracol,,kg
 fungicide-dithane,FUNGICIDE,Dithane,,kg
 fungicide-fungitox,FUNGICIDE,Fungitox,,kg
 herbicide-kocide,HERBICIDE,Kocide,,L
-highland-vegetables-bell-pepper-green-local-medium-151-250gm-pc,HIGHLAND VEGETABLES,"Bell Pepper (Green), Local",Medium (151- 250gm/pc),kg
-highland-vegetables-bell-pepper-red-local-medium-151-250gm-pc,HIGHLAND VEGETABLES,"Bell Pepper (Red), Local",Medium (151- 250gm/pc),kg
 highland-vegetables-bottle-gourd-upo,HIGHLAND VEGETABLES,Bottle Gourd (Upo),,kg
-highland-vegetables-broccoli-local-medium-8-10-cm-diameter-bunch-hd,HIGHLAND VEGETABLES,"Broccoli, Local",Medium (8-10 cm diameter/bunch hd),kg
-highland-vegetables-cabbage-rare-ball-510-gm-1-kg-head,HIGHLAND VEGETABLES,Cabbage (Rare Ball),510 gm - 1 kg/head,kg
 highland-vegetables-cabbage-scorpio-750-gm-1-kg-head,HIGHLAND VEGETABLES,Cabbage (Scorpio),750 gm - 1 kg/head,kg
 highland-vegetables-cabbage-wonder-ball-510-gm-1-kg-head,HIGHLAND VEGETABLES,Cabbage (Wonder Ball),510 gm - 1 kg/head,kg
 highland-vegetables-carrots-local-8-10-pcs-kg,HIGHLAND VEGETABLES,"Carrots, Local",8-10 pcs/kg,kg
-highland-vegetables-cauliflower-local-medium-8-10-cm-diameter-bunch-hd,HIGHLAND VEGETABLES,"Cauliflower, Local",Medium (8-10 cm diameter/bunch hd),kg
 highland-vegetables-celery-medium-501-800-g,HIGHLAND VEGETABLES,Celery,Medium (501-800 g),kg
 highland-vegetables-chayote-medium-301-400-g,HIGHLAND VEGETABLES,Chayote,Medium (301-400 g),kg
 highland-vegetables-cucumber,HIGHLAND VEGETABLES,Cucumber,,kg
+highland-vegetables-habichuelas-baguio-beans,HIGHLAND VEGETABLES,Habichuelas/Baguio Beans,,kg
 highland-vegetables-lettuce-green-ice,HIGHLAND VEGETABLES,Lettuce (Green Ice),,kg
+highland-vegetables-lettuce-iceberg-medium,HIGHLAND VEGETABLES,Lettuce (Iceberg),Medium,kg
 highland-vegetables-lettuce-romaine,HIGHLAND VEGETABLES,Lettuce (Romaine),,kg
 highland-vegetables-okra,HIGHLAND VEGETABLES,Okra,,kg
 highland-vegetables-pechay-baguio,HIGHLAND VEGETABLES,Pechay Baguio,,kg
@@ -142,7 +136,7 @@ rootcrops-sweet-potato,ROOTCROPS,Sweet Potato,,kg
 spices-chilli-red-local-tingala,SPICES,"Chilli (Red), Local",Tingala,kg
 spices-garlic-imported,SPICES,"Garlic, Imported",,kg
 spices-garlic-native-local,SPICES,"Garlic, Native/Local",,kg
-spices-ginger-local-fairly-well-matured-medium-150-300-gm,SPICES,"Ginger, Local","Fairly well-matured, Medium (150-300 gm)",kg
+spices-ginger-local-fairly-well-matured,SPICES,"Ginger, Local",Fairly well-matured,kg
 spices-red-onion-imported,SPICES,"Red Onion, Imported",,kg
 spices-red-onion-local-13-15-pcs-kg,SPICES,"Red Onion, Local",13-15 pcs/kg,kg
 spices-sweet-pepper,SPICES,Sweet Pepper,,kg
