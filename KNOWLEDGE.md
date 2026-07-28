@@ -248,6 +248,27 @@ file matching `revised` (checked over all 535 links). The `Revised-` files are p
 `www.da.gov.ph`, whose robots.txt disallows every PDF, so one can only reach the fixture
 corpus by manual download.
 
+### A row can be internally impossible, and one is
+
+Verified 2026-07-29 in `Mayor-Salvador-Calo-July-19-2029.pdf`. The extracted cells are:
+
+```
+[None, 'Corn Cracked', 'Yellow, Feed Grade', 'kg', '45.00', '45.00', '45.00', '4.00']
+```
+
+LOW, HIGH and PREVAILING all say 45.00; AVERAGE says **4.00**. The raw text line agrees, so
+this is the source dropping a digit, **not an extraction fault** — checked against the same
+commodity on eleven other sheets, which report 36.00–47.00.
+
+An average outside `[low, high]` is arithmetically impossible, not merely unusual, so this is
+detectable without any statistics at all. Nothing currently detects it: the schema constrains
+`low <= high` and the parser mirrors that, but neither looks at where the average sits. The
+row is stored as published, which is correct — but it surfaces on the dashboard's movers
+table as **+1025%**, the largest move in the dataset, produced entirely by a typo.
+
+This is the concrete argument for the Phase 4 anomaly page, and for a cheaper check before
+it. See TASK.md.
+
 ### The sheet's own date beats the filename
 
 `Mayor-Salvador-Calo-July-19-2029.pdf` contains `Date of Monitoring : July 19, 2026`.

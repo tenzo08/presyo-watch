@@ -58,13 +58,19 @@ localhost one.
 
 ## Phase 3 — Dashboard (target: 2 weeks)
 
-- [ ] Next.js app, deployed to Vercel or Cloudflare Pages
-- [ ] Time series chart with region/market comparison
-- [ ] "Biggest movers" table over a selectable window
-- [ ] Commodity search
-- [ ] Proper loading skeletons and error states — assume the API is cold and slow
-- [ ] Source attribution footer (PSA CC BY 4.0, DA)
-- [ ] **Ship it publicly. Put the URL at the top of your CV.**
+- [x] Next.js app — static export in `web/`; `vercel.json` committed. **The deploy itself
+      still needs an account** (see below).
+- [x] Time series chart with region/market comparison — one line per market, up to six,
+      colours from a palette validated for colour-blindness by script in both modes
+- [x] "Biggest movers" table over a selectable window — backed by a new `/movers` endpoint
+- [x] Commodity search — debounced, server-side, with superseded requests aborted
+- [x] Proper loading skeletons and error states — assume the API is cold and slow
+      — skeletons show the shape of what is coming, and a timeout is distinguished from a
+      500, because "still waking up" and "broken" deserve different reactions
+- [x] Source attribution footer (PSA CC BY 4.0, DA) — text fetched from `/meta/sources` so it
+      cannot drift from what the ingester recorded, with a hard-coded fallback
+- [ ] **Ship it publicly. Put the URL at the top of your CV.** Connect `web/` to Vercel or
+      Cloudflare Pages, set `NEXT_PUBLIC_API_URL` to the deployed API, output directory `out`.
 
 ## Phase 4 — Analytics (target: 2 weeks)
 
@@ -226,3 +232,25 @@ _(append new tasks here as they surface — do not silently expand scope in othe
       everything it skips, and `COUNT` over a filtered join is not free. Keyset pagination on
       `(observed_on, id)` is the fix when it starts to matter, and it is a breaking change to
       the response shape, so decide before anyone depends on `offset`.
+- [ ] **Flag rows whose average falls outside `[low, high]`.** `Mayor-Salvador-Calo-July-19-2029.pdf`
+      publishes `Corn Cracked` as low 45.00, high 45.00, prevailing 45.00, **average 4.00** —
+      the source dropped a digit. It is arithmetically impossible rather than merely odd, so
+      catching it needs no statistics, and it currently leads the dashboard's movers table at
+      **+1025%**. Decide between quarantining the row at stage `validate` and storing it with
+      an `implausible` flag; quarantining loses three good figures to save one bad one, so the
+      flag is probably right. Either way it is a *proposal*, not a silent parser change.
+- [ ] **Search offers commodities that have no observations.** The commodity table is the
+      seeded vocabulary, and much of it has never been monitored — the top match for "rice" is
+      `Other Special Rice | White Rice`, which has zero rows. The dashboard's default now comes
+      from `/movers` so the landing page cannot be empty, but a reader can still search their
+      way into an empty chart. Either mark such entries in the results or add a
+      `has_observations` filter to `/commodities`.
+- [ ] **The dashboard has never been looked at in a browser.** Types check, the production
+      build succeeds, the palette passes the validator, and the API contract was verified
+      against live data — but nobody has rendered the page and checked for label collisions,
+      axis overflow, or how the six-market legend wraps on a phone. Run `npm run dev` and look
+      at it before sharing the URL.
+- [ ] **`npm audit` reports Next advisories that do not apply, and will keep doing so.** Every
+      one concerns a Next *server*; this is a static export with no runtime. `postcss` is
+      pinned forward because its advisories do touch the build. Revisit if the dashboard ever
+      grows a server, at which point they all become real.

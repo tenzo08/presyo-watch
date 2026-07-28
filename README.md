@@ -4,11 +4,10 @@ A free, public data platform that ingests Philippine agricultural and commodity 
 data daily, stores it as a time series, serves it through an API, and presents it as a
 dashboard with anomaly detection and forecasting.
 
-> **Status: ingestion and a read API work; not yet deployed, no dashboard.** A run scrapes a
-> regional DA index, fetches each sheet at most once ever, parses it, and upserts
-> observations idempotently; a FastAPI app serves them. The deploy itself needs an account
-> and is the one Phase 2 step that cannot be done from here. See [`TASK.md`](TASK.md) for
-> the build order and what is actually done.
+> **Status: ingestion, API and dashboard all built; API deployed.** A run scrapes a regional
+> DA index, fetches each sheet at most once ever, parses it, and upserts observations
+> idempotently; a FastAPI app serves them; a static Next.js dashboard charts them. See
+> [`TASK.md`](TASK.md) for the build order and what is actually done.
 
 ## Running the ingester
 
@@ -68,6 +67,15 @@ idling would be pretending the constraint is not there.
 
 `DATABASE_URL` and `HTTP_USER_AGENT` are set in the Render dashboard and are never in this
 repository.
+
+## The dashboard
+
+A static Next.js export in [`web/`](web/) — no server of its own, so it deploys free to
+Vercel or Cloudflare Pages and the reader sees a painted page immediately while the sleeping
+API wakes up behind a labelled loading state. See [`web/README.md`](web/README.md) for the
+chart's design constraints, which are stricter than they look: the series palette is
+validated for colour-blindness by script rather than chosen by eye, gaps in monitoring break
+the line rather than being bridged, and nothing is ever averaged across markets.
 
 ## Automation
 
