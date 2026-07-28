@@ -10,8 +10,8 @@ localhost one.
 
 ## Phase 1 — Ingestion (target: 2 weeks)
 
-- [ ] Repo scaffold: `src/`, `tests/`, `pyproject.toml`, ruff + mypy config, pre-commit
-- [ ] `.env.example` with placeholders; real `.env` gitignored
+- [x] Repo scaffold: `src/`, `tests/`, `pyproject.toml`, ruff + mypy config, pre-commit
+- [x] `.env.example` with placeholders; real `.env` gitignored
 - [ ] `robots.txt` checker utility — fetches and parses per host, caches result, refuses
       to fetch disallowed paths. Wire it into the HTTP client so it cannot be bypassed.
 - [ ] Content-addressed raw file cache (SHA-256 keyed), with a `fetch_once()` wrapper

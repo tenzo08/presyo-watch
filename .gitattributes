@@ -1,0 +1,17 @@
+# Normalize all text to LF in the repository and in the working tree. Without this,
+# Windows checkouts produce CRLF files that the `mixed-line-ending` pre-commit hook
+# immediately rewrites to LF, causing churn on every commit.
+* text=auto eol=lf
+
+# Source fixtures are hashed with SHA-256 and matched against the content-addressed
+# cache (CLAUDE.md rule 3). Any line-ending conversion would change the hash and
+# corrupt the file. Treat them as bytes, always.
+*.pdf binary
+*.xlsx binary
+*.xls binary
+*.png binary
+*.jpg binary
+*.zip binary
+
+# Lockfile is generated; keep it out of diff review noise.
+uv.lock linguist-generated=true

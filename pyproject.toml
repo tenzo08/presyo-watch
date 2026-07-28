@@ -1,0 +1,132 @@
+[project]
+name = "presyowatch"
+description = "Daily ingestion, API, and dashboard for Philippine commodity price data."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [{ name = "Raphael Lizarde", email = "rlizarde@up.edu.ph" }]
+dynamic = ["version"]
+
+# Pinned to the Phase 1 stack named in PLANNING.md. Lower bounds only; uv.lock
+# holds the exact resolution so CI and local runs agree.
+dependencies = [
+    "httpx>=0.27",
+    "pdfplumber>=0.11.4",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "structlog>=24.4",
+    "sqlalchemy>=2.0.36",
+    "alembic>=1.14",
+    "psycopg[binary]>=3.2",
+]
+
+[project.urls]
+Repository = "https://github.com/tenzo08/presyo-watch"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "pre-commit>=4.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/presyowatch/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/presyowatch"]
+
+# ---------------------------------------------------------------------------
+# ruff — lint and format
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "N",      # pep8-naming
+    "UP",     # pyupgrade
+    "ANN",    # flake8-annotations — typed signatures everywhere (CLAUDE.md § Style)
+    "ASYNC",  # flake8-async
+    "S",      # flake8-bandit
+    "BLE",    # flake8-blind-except — no bare `except:` (CLAUDE.md § Definition of done)
+    "B",      # flake8-bugbear
+    "A",      # flake8-builtins
+    "C4",     # flake8-comprehensions
+    "DTZ",    # flake8-datetimez — a time series needs tz-aware datetimes
+    "T20",    # flake8-print — never bare `print()` (CLAUDE.md § Style)
+    "EM",     # flake8-errmsg
+    "LOG",    # flake8-logging
+    "G",      # flake8-logging-format
+    "PIE",    # flake8-pie
+    "PT",     # flake8-pytest-style
+    "RET",    # flake8-return
+    "SIM",    # flake8-simplify
+    "TID",    # flake8-tidy-imports
+    "TC",     # flake8-type-checking
+    "ARG",    # flake8-unused-arguments
+    "PTH",    # flake8-use-pathlib
+    "ERA",    # eradicate — no commented-out code
+    "PL",     # pylint
+    "TRY",    # tryceratops — explicit error handling
+    "RUF",    # ruff-specific
+]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S101",    # assert is the point of a test
+    "PLR2004", # magic values are fine in assertions
+    "ARG",     # fixtures are injected and often unused by name
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+# ---------------------------------------------------------------------------
+# mypy — strict, per CLAUDE.md § Style
+# ---------------------------------------------------------------------------
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src", "tests"]
+strict = true
+# Beyond --strict:
+warn_unreachable = true
+disallow_any_unimported = true
+enable_error_code = [
+    "ignore-without-code",
+    "redundant-expr",
+    "truthy-bool",
+]
+
+[[tool.mypy.overrides]]
+# pdfplumber ships no type information and has no stubs on typeshed.
+module = ["pdfplumber.*"]
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+xfail_strict = true
+filterwarnings = ["error"]

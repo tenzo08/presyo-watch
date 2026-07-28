@@ -1,0 +1,54 @@
+# PresyoWatch
+
+A free, public data platform that ingests Philippine agricultural and commodity price
+data daily, stores it as a time series, serves it through an API, and presents it as a
+dashboard with anomaly detection and forecasting.
+
+> **Status: scaffold only.** No ingestion, API, or dashboard yet. See
+> [`TASK.md`](TASK.md) for the build order and what is actually done.
+
+## Development
+
+Dependencies are managed with [uv](https://docs.astral.sh/uv/).
+
+```bash
+uv sync                        # create .venv and install everything, incl. dev tools
+cp .env.example .env           # then fill in real values — never commit .env
+uv run pre-commit install      # enable the pre-commit hooks
+
+uv run ruff check .            # lint
+uv run ruff format .           # format
+uv run mypy                    # type check (strict, per pyproject.toml)
+uv run pytest                  # tests
+```
+
+## Documentation
+
+| File | Contents |
+|---|---|
+| [`PLANNING.md`](PLANNING.md) | Architecture, stack rationale, schema, design principles |
+| [`TASK.md`](TASK.md) | Phased task list — the single source of scope |
+| [`KNOWLEDGE.md`](KNOWLEDGE.md) | Verified facts about the data sources; do not contradict without re-verifying |
+| [`CLAUDE.md`](CLAUDE.md) | Non-negotiable engineering rules for this repo |
+
+## Data sources and attribution
+
+This project redistributes public data published by agencies of the Government of the
+Philippines. Full attribution is a condition of use, not a courtesy.
+
+- **Philippine Statistics Authority (PSA)** — [OpenStat](https://openstat.psa.gov.ph/).
+  Licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+- **Department of Agriculture (DA)** — Bantay Presyo price monitoring, published by the
+  national portal and regional field offices.
+
+Automated collection respects `robots.txt` on a per-host basis. `www.da.gov.ph`
+disallows automated access to its uploads directory, so national PDFs are **not**
+fetched automatically. See [`KNOWLEDGE.md`](KNOWLEDGE.md) for the verified position on
+each host and the legal basis under RA 8293 §§ 175–176.
+
+Prices shown are as published by the source agency. This project does not correct,
+smooth, or interpolate source data; gaps are shown as gaps.
+
+## License
+
+Code is MIT licensed. Data carries the license of its originating agency, above.
