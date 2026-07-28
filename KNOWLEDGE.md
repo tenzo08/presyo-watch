@@ -170,6 +170,34 @@ raw href recorded. Never generate a URL and hope.
 The `Revised-` files are the reason the schema needs `observation_revisions`. This is a
 real correction-handling problem, not a hypothetical one.
 
+### Caraga's directory layout is not trustworthy either
+
+Verified 2026-07-28 from `https://caraga.da.gov.ph/price-monitoring`, which lists
+**538 PDF links on a single page** — the whole index arrives in one request, which is
+comfortable under a one-request-per-second budget.
+
+The layout in this file's "Source status" section is *approximately* right and must not
+be used to generate URLs. Real hrefs from that one page:
+
+```
+/wp-content/uploads/PriceMonitoring/FY2025/CabadbaranCity/june/Cabadbaran-City-Public-Market_June-24-2026.pdf
+/wp-content/uploads/PriceMonitoring/FY2026/ButuanCity/April/April-2026-April-10.pdf
+```
+
+- A **June 2026** file filed under **`FY2025`**. Fetched successfully (HTTP 200,
+  62,680 bytes), so the path is real, not a broken link. The fiscal-year directory does
+  not reliably match the date in the filename.
+- Month directory casing is inconsistent: `june` in one path, `April` in another.
+- Filename forms differ for the same series: `{Market}_{Month}-{Day}-{Year}.pdf` in one,
+  `{Month}-{Year}-{Month}-{Day}.pdf` in another, with no market name at all.
+- **Dead links are mixed into the index.** Three `/Downloads/JobOpportunity/*.pdf`
+  hrefs on both the home page and the index return **404**. An index scraper must treat
+  a 404 on one href as a skipped file, not a failed run.
+
+Together these mean the date and market must be parsed from link text and filename with
+a tolerant parser, exactly as for the national source, and the directory path must not be
+used to infer either.
+
 ---
 
 ## Legal position

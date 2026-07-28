@@ -14,7 +14,7 @@ localhost one.
 - [x] `.env.example` with placeholders; real `.env` gitignored
 - [x] `robots.txt` checker utility — fetches and parses per host, caches result, refuses
       to fetch disallowed paths. Wire it into the HTTP client so it cannot be bypassed.
-- [ ] Content-addressed raw file cache (SHA-256 keyed), with a `fetch_once()` wrapper
+- [x] Content-addressed raw file cache (SHA-256 keyed), with a `fetch_once()` wrapper
       that returns cached bytes if the file has been seen
 - [x] HTTP client: descriptive User-Agent + contact email, 1 req/sec/host limit,
       exponential backoff with jitter, explicit timeout
@@ -96,3 +96,13 @@ _(append new tasks here as they surface — do not silently expand scope in othe
 - [ ] **Optional: a network-marked integration test** for the live hosts. Verified manually
       on 2026-07-28 (DA PDF refused, Caraga fetched, rate limiter observed); not automated,
       because CI should not depend on a government server being up.
+- [ ] **The index scraper must tolerate dead hrefs.** Three PDF links on Caraga's index
+      return 404 (verified 2026-07-28). A 404 on one href is a skipped file, not a failed
+      run — quarantine the href and carry on. See KNOWLEDGE.md § "Caraga's directory
+      layout is not trustworthy either".
+- [ ] **Surface `RawCache.verify()` on the data quality page.** It re-hashes every blob and
+      reports corruption, but nothing calls it yet. It wants to be a scheduled check, not
+      a method nobody runs.
+- [ ] **Decide how `CacheConflictError` is handled by the ingester.** The cache refuses to
+      overwrite a known URL whose bytes changed, which is the right default, but a run that
+      hits it currently just fails. It should probably quarantine and continue.
