@@ -198,6 +198,40 @@ Together these mean the date and market must be parsed from link text and filena
 a tolerant parser, exactly as for the national source, and the directory path must not be
 used to infer either.
 
+### Measured, over all 535 price-monitoring links on that page
+
+The index page is committed as a fixture
+(`tests/fixtures/index/caraga.da.gov.ph_price-monitoring.html`, captured 2026-07-28), so
+these numbers are reproducible rather than anecdotal:
+
+| Observation | Count |
+|---|---|
+| Price-monitoring PDF links (after filtering out job postings etc.) | 535 |
+| Dates read successfully | 451 |
+| **Rejected: no year in link text *or* filename** | **81 (15%)** |
+| Rejected for other reasons | 3 |
+| **Read successfully but whose filename year contradicts its `FY####` directory** | **57 of 451 (12.6%)** |
+
+Two conclusions follow, and they are the reason the scraper behaves as it does.
+
+**The `FY` directory cannot supply the missing year.** All 81 year-less links sit under a
+`FY####` directory, so the year looks available. But among the entries where the filename
+*does* state a year, 12.6% contradict their directory — February 2025 sheets filed under
+`FY2026`. Inferring from the directory would therefore misdate roughly one in eight of them.
+They are quarantined instead, with the reason recorded. Losing 15% honestly beats publishing
+12% of it wrong, and the quarantine count makes the loss visible.
+
+**One file is dated in the future.**
+`FY2026/ButuanCity/July/Mayor-Salvador-Calo-July-19-2029.pdf`, link text "July 19". The
+year is a typo at the source. Read literally it plants a point three years to the right of
+every chart, so the scraper takes an optional `not_after` bound and the ingester should pass
+today's date.
+
+Two incidental notes from the same page: `Mayor Salvador Calo` is a real Butuan market, so
+`Mayor` is a legitimate filename token that a careless fuzzy month matcher reads as `May`;
+and doubled extensions are a habit here too (`...July-23-2026.xlsx.pdf`), matching the DOE
+oil monitor's `.pdf.pdf`.
+
 ---
 
 ## Legal position

@@ -116,6 +116,12 @@ runtime-evaluated-decorators = ["dataclasses.dataclass"]
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+[tool.ruff.lint.pylint]
+# A tolerant parser is a sequence of "give up, and say precisely why" early returns. Each
+# one carries a distinct reason for quarantine; collapsing them into nested branches to
+# satisfy a counter would make the failure paths harder to follow, not easier.
+max-returns = 8
+
 # ---------------------------------------------------------------------------
 # mypy — strict, per CLAUDE.md § Style
 # ---------------------------------------------------------------------------

@@ -19,7 +19,7 @@ localhost one.
 - [x] HTTP client: descriptive User-Agent + contact email, 1 req/sec/host limit,
       exponential backoff with jitter, explicit timeout
 - [x] Postgres schema + migrations (Alembic) per PLANNING.md
-- [ ] Index scraper for one regional DA source: extract anchor hrefs, tolerant date
+- [x] Index scraper for one regional DA source: extract anchor hrefs, tolerant date
       parsing from link text with filename fallback, quarantine unparseable entries
 - [ ] `pdfplumber` parser producing validated Pydantic rows; group labels from positional
       extraction, blanks as NULL + `unavailable` flag, unit normalization
@@ -96,10 +96,22 @@ _(append new tasks here as they surface — do not silently expand scope in othe
 - [ ] **Optional: a network-marked integration test** for the live hosts. Verified manually
       on 2026-07-28 (DA PDF refused, Caraga fetched, rate limiter observed); not automated,
       because CI should not depend on a government server being up.
-- [ ] **The index scraper must tolerate dead hrefs.** Three PDF links on Caraga's index
+- [ ] **The backfill runner must tolerate dead hrefs.** Three PDF links on Caraga's index
       return 404 (verified 2026-07-28). A 404 on one href is a skipped file, not a failed
-      run — quarantine the href and carry on. See KNOWLEDGE.md § "Caraga's directory
-      layout is not trustworthy either".
+      run — quarantine the href and carry on. The scraper does not fetch, so this belongs to
+      whatever drives it. See KNOWLEDGE.md § "Caraga's directory layout is not trustworthy".
+- [ ] **Recover the 81 year-less Caraga links (15% of the index).** Files like
+      `Cabadbaran-City-Public-Market_July-22.pdf` carry no year in the filename or the link
+      text. They are quarantined rather than guessed, because the only available year is the
+      `FY####` directory and that contradicts the filename 12.6% of the time. The likely
+      answer is the page's own grouping — the links sit under year/month headings — which
+      means passing surrounding page context into the scraper, not just the anchor.
+- [ ] **Have the ingester pass `not_after=today` to `scrape_index`.** The bound exists and is
+      tested but defaults to off, so nothing currently stops the source's 2029-dated typo.
+- [ ] **Archive index snapshots.** The index page is deliberately not `fetch_once`d because it
+      is mutable, so nothing keeps a copy of what the listing said on a given day. A
+      content-addressed store keyed by hash alone — no URL index — would preserve the audit
+      trail without breaking the never-re-fetch rule.
 - [ ] **Surface `RawCache.verify()` on the data quality page.** It re-hashes every blob and
       reports corruption, but nothing calls it yet. It wants to be a scheduled check, not
       a method nobody runs.
