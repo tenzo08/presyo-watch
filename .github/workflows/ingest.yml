@@ -1,0 +1,90 @@
+# The daily ingestion run.
+#
+# Paired with `workflow_dispatch` on purpose. KNOWLEDGE.md § "GitHub Actions scheduling
+# caveats": a `schedule:` trigger has no timing SLA, is commonly 5–30 minutes late, is
+# dropped under load, only fires from the default branch, and is disabled outright after 60
+# days without a commit. None of that is a problem here, because a run reconciles a 14-day
+# window rather than "today" — but it does mean there has to be a way to fire one by hand.
+name: Ingest
+
+on:
+  schedule:
+    # 21:00 UTC is 05:00 in Manila, after the previous day's sheets are published and well
+    # outside the hours a regional office is likely to be doing anything with its server.
+    - cron: "0 21 * * *"
+  workflow_dispatch:
+    inputs:
+      lookback_days:
+        description: "How many days back to reconcile"
+        required: false
+        default: "14"
+
+concurrency:
+  # Never two runs at once. The upsert reads existing rows under a row lock before writing,
+  # and ingestion is designed to be single-flight; overlapping runs would be correct but
+  # would queue on each other while both hold connections a free tier counts.
+  group: ingest
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      HTTP_USER_AGENT: ${{ secrets.HTTP_USER_AGENT }}
+      RAW_CACHE_DIR: ${{ github.workspace }}/.cache/raw
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+
+      - name: restore the raw source cache
+        # Rule 3 says a source file is fetched once, ever. A runner's disk is destroyed after
+        # every job, so without this the ingester would re-download the whole lookback window
+        # daily — polite by the letter of the rate limit, rude in spirit, and slow.
+        #
+        # This is a stopgap, not the answer. Actions caches are evicted after 7 days without a
+        # read and capped at 10 GB per repository, so the archive will eventually thin out.
+        # PLANNING.md names Cloudflare R2 as the durable home; see TASK.md.
+        uses: actions/cache@v4
+        with:
+          path: .cache/raw
+          key: raw-cache-${{ github.run_id }}
+          restore-keys: raw-cache-
+
+      - name: apply migrations
+        run: uv run alembic upgrade head
+
+      - name: load reference data
+        # Idempotent, so running it every time costs one transaction and picks up any newly
+        # curated commodity aliases without a separate deploy step.
+        run: uv run python -m presyowatch seed
+
+      - name: backfill
+        id: backfill
+        run: |
+          set +e
+          uv run python -m presyowatch backfill --lookback-days "${{ inputs.lookback_days || 14 }}"
+          code=$?
+          set -e
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          case "$code" in
+            0) echo "### Ingestion succeeded" >> "$GITHUB_STEP_SUMMARY" ;;
+            2) echo "### Ingestion partial — some files were quarantined" >> "$GITHUB_STEP_SUMMARY" ;;
+            *) echo "### Ingestion failed (exit $code)" >> "$GITHUB_STEP_SUMMARY" ;;
+          esac
+          # Exit 2 means some files landed and some were quarantined, which is the normal
+          # state of a source that publishes dead links. Failing the job on it would train
+          # everyone to ignore a red X; the run is recorded in `ingestion_runs` either way and
+          # the data quality page is where that belongs. A hard failure still fails.
+          test "$code" -ne 1
+
+      - name: report
+        if: always()
+        run: echo "backfill exited ${{ steps.backfill.outputs.exit_code || 'unknown' }}"

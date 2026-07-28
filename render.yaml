@@ -1,0 +1,37 @@
+# Render blueprint for the read API.
+#
+# The free web service plan is the deployment target PLANNING.md picked, and its defining
+# property is that it **spins down after 15 minutes without traffic** and takes roughly 30–60
+# seconds to come back. That is not hidden: the dashboard is required to handle a slow first
+# request with a skeleton rather than a spinner that hangs, and the README says so plainly.
+#
+# Deliberately no cron job here to keep the service warm. Free instance hours are finite, and
+# pinging a service purely to defeat its own idling is a way of pretending the constraint does
+# not exist rather than designing around it.
+#
+# Apply with: render blueprint launch  (or point Render at this file in the dashboard)
+services:
+  - type: web
+    name: presyowatch-api
+    runtime: python
+    plan: free
+    region: singapore # closest to both the data's subject and its likely readers
+    branch: main
+    buildCommand: pip install uv && uv sync --frozen --no-dev
+    # `--factory` because there is no module-level `app`: importing one would require a
+    # DATABASE_URL at import time and break the linter and the tests.
+    startCommand: >-
+      uv run alembic upgrade head &&
+      uv run uvicorn "presyowatch.api.app:create_app" --factory
+      --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false # set in the dashboard; never in this file (rule 6)
+      - key: HTTP_USER_AGENT
+        sync: false
+      - key: RAW_CACHE_DIR
+        # The API never fetches anything, so this is only here because Settings requires it.
+        value: /tmp/presyowatch-cache
+      - key: PYTHON_VERSION
+        value: "3.12"

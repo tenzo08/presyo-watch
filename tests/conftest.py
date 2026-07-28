@@ -154,6 +154,11 @@ def engine() -> Iterator[Engine]:
     something subtly different would go unnoticed.
     """
     if not DATABASE_URL:
+        if os.environ.get("CI"):
+            # Skipping locally is a convenience; skipping in CI is a green tick for a suite
+            # that tested nothing touching Postgres. A typo in the workflow's environment
+            # would otherwise be invisible, so it fails here instead.
+            pytest.fail("PRESYOWATCH_TEST_DATABASE_URL must be set in CI")
         pytest.skip("set PRESYOWATCH_TEST_DATABASE_URL to run tests against a real Postgres")
 
     built = create_engine(DATABASE_URL, future=True)

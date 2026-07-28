@@ -1,0 +1,113 @@
+# Lint, type check and test on every push and pull request.
+#
+# The test job runs against a real PostgreSQL service container rather than SQLite. The
+# schema uses JSONB, a composite unique constraint and CHECK constraints that SQLite either
+# ignores or renders differently, so a green SQLite run would prove nothing about the
+# database this actually deploys to. It is also what lets `tests/db` and `tests/api` stop
+# being skipped in CI.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  # A new push supersedes an in-flight run of the same branch. Nobody needs the results of
+  # a commit that has already been replaced.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_FROZEN: "1" # fail rather than silently re-resolving if uv.lock is stale
+
+jobs:
+  quality:
+    name: lint and types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-extras --dev
+      - name: ruff (lint)
+        run: uv run ruff check .
+      - name: ruff (format)
+        run: uv run ruff format --check .
+      - name: mypy --strict
+        run: uv run mypy
+
+  test:
+    name: tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: presyowatch_test
+        ports: ["5432:5432"]
+        # Without a health check the steps start before the server accepts connections and
+        # the first test fails on a connection refused rather than on anything real.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PRESYOWATCH_TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/presyowatch_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-extras --dev
+      - name: pytest
+        run: uv run pytest -q
+      # Nothing checks for skips here on purpose: the `engine` fixture fails outright rather
+      # than skipping when CI is set, so a typo in the environment above turns the suite red
+      # instead of green. GitHub sets CI=true for every runner.
+
+  migration:
+    name: migration applies and reverses
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: presyowatch_migration
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/presyowatch_migration
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --all-extras --dev
+      - name: upgrade
+        run: uv run alembic upgrade head
+      - name: models have not drifted from the migration
+        # The important one. `alembic check` fails if the models describe a schema the
+        # migrations do not build, which is how a column added to a model without a
+        # migration gets caught before it reaches a deployment.
+        run: uv run alembic check
+      - name: seed loads
+        run: uv run python -m presyowatch seed
+        env:
+          HTTP_USER_AGENT: "PresyoWatch-CI/0.1 (+https://github.com/tenzo08/presyo-watch; contact: rlizarde@up.edu.ph)"
+          RAW_CACHE_DIR: ${{ runner.temp }}/raw-cache
+      - name: seeding twice changes nothing
+        run: uv run python -m presyowatch seed
+        env:
+          HTTP_USER_AGENT: "PresyoWatch-CI/0.1 (+https://github.com/tenzo08/presyo-watch; contact: rlizarde@up.edu.ph)"
+          RAW_CACHE_DIR: ${{ runner.temp }}/raw-cache
+      - name: downgrade
+        run: uv run alembic downgrade base

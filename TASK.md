@@ -35,14 +35,26 @@ localhost one.
 
 ## Phase 2 — API + CI (target: 1 week)
 
-- [ ] FastAPI app: typed responses, pagination, filters for commodity / region / market /
+- [x] FastAPI app: typed responses, pagination, filters for commodity / region / market /
       date range; `/health` and `/meta/sources` endpoints
-- [ ] OpenAPI docs served at `/docs` with real examples
-- [ ] Pytest against a test database (Neon branch or dockerized Postgres)
-- [ ] GitHub Actions CI: ruff, mypy --strict, pytest on every PR
-- [ ] GitHub Actions ingestion workflow: `schedule:` + `workflow_dispatch:`, reconciles a
+      — plus `/meta/runs`, `/regions`, `/markets`, `/commodities`, `/commodities/{slug}`
+- [x] OpenAPI docs served at `/docs` with real examples
+      — examples copied from a live run, and a test validates them against their own schemas
+      so the docs cannot quietly start lying
+- [x] Pytest against a test database (Neon branch or dockerized Postgres)
+      — a `postgres:17` service container in CI; the `engine` fixture *fails* rather than
+      skips when `CI` is set, so a typo in the workflow environment cannot turn the suite
+      green while testing nothing
+- [x] GitHub Actions CI: ruff, mypy --strict, pytest on every PR
+      — plus a third job proving the migration applies, does not drift from the models
+      (`alembic check`), seeds twice without changing anything, and reverses
+- [x] GitHub Actions ingestion workflow: `schedule:` + `workflow_dispatch:`, reconciles a
       14-day lookback window, writes an `ingestion_runs` row even on failure
-- [ ] Deploy API to Render; document the cold-start tradeoff in the README
+- [ ] **Deploy API to Render.** `render.yaml` is written and the cold-start tradeoff is in
+      the README, but the deploy itself needs an account: connect the repo to Render, set
+      `DATABASE_URL` (a Neon connection string) and `HTTP_USER_AGENT` in the dashboard, then
+      add the same two as repository secrets so the ingestion workflow can run. **Nothing
+      else in Phase 2 is blocked on this.**
 
 ## Phase 3 — Dashboard (target: 2 weeks)
 
@@ -205,3 +217,12 @@ _(append new tasks here as they surface — do not silently expand scope in othe
       about 84 rows a day for a fixed, known problem. Either key index-stage quarantine on
       `(source_id, source_url)` and upsert it, or record a `last_seen_at` instead of a new
       row. Worth settling before the data quality page counts these (Phase 4).
+- [ ] **The raw cache on GitHub Actions is a stopgap.** `ingest.yml` restores it with
+      `actions/cache`, which is evicted after 7 days without a read and capped at 10 GB per
+      repository — so the permanent archive rule 3 promises is not actually permanent there.
+      PLANNING.md names Cloudflare R2; wire it up before the archive matters.
+- [ ] **`/observations` pages with `LIMIT`/`OFFSET` and counts with a second query.** Both
+      are fine at today's size and both degrade on a large time series: a deep offset scans
+      everything it skips, and `COUNT` over a filtered join is not free. Keyset pagination on
+      `(observed_on, id)` is the fix when it starts to matter, and it is a breaking change to
+      the response shape, so decide before anyone depends on `offset`.

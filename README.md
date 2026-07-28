@@ -4,10 +4,11 @@ A free, public data platform that ingests Philippine agricultural and commodity 
 data daily, stores it as a time series, serves it through an API, and presents it as a
 dashboard with anomaly detection and forecasting.
 
-> **Status: ingestion works end to end; no API or dashboard yet.** A run scrapes a regional
-> DA index, fetches each sheet at most once ever, parses it, and upserts observations
-> idempotently. Not yet deployed or scheduled — that is Phase 2. See [`TASK.md`](TASK.md)
-> for the build order and what is actually done.
+> **Status: ingestion and a read API work; not yet deployed, no dashboard.** A run scrapes a
+> regional DA index, fetches each sheet at most once ever, parses it, and upserts
+> observations idempotently; a FastAPI app serves them. The deploy itself needs an account
+> and is the one Phase 2 step that cannot be done from here. See [`TASK.md`](TASK.md) for
+> the build order and what is actually done.
 
 ## Running the ingester
 
@@ -35,6 +36,58 @@ enough of the raw payload to be reprocessed later. Nothing is dropped silently.
   because the heuristic that would merge `Well-Milled` into `Well Milled` would also merge
   feed-grade corn grits into food-grade.
 - **Route around `robots.txt`.** A disallow ends the run rather than being worked around.
+
+## The API
+
+```bash
+uv run uvicorn "presyowatch.api.app:create_app" --factory --reload
+```
+
+Interactive docs at `/docs`. The endpoints are `/health`, `/meta/sources`, `/meta/runs`,
+`/regions`, `/markets`, `/commodities`, `/commodities/{slug}` and `/observations`, all
+read-only and all paginated with a hard ceiling on page size.
+
+Two things about the responses are deliberate and will surprise somebody:
+
+- **Prices are JSON strings, not numbers.** They are exact decimals, and JSON numbers are
+  IEEE-754 doubles: `52.80` arrives as `52.79999999999999716` in anything that parses them
+  as floats, and ends up on a chart with fifteen decimal places. A string round-trips
+  exactly and the client decides what to do with it.
+- **`/meta/runs` is public.** Every ingestion run, including the failed ones. PLANNING.md
+  treats observability as a feature rather than an afterthought, and a run that broke is
+  more informative to a reader than one that worked.
+
+### Deploying
+
+[`render.yaml`](render.yaml) is a Render blueprint for the free web service plan. **The
+free plan spins down after 15 minutes of inactivity and takes roughly 30–60 seconds to wake
+up.** That is a real constraint, not a footnote: the dashboard has to render a skeleton for
+a slow first request rather than a spinner that hangs forever. There is deliberately no cron
+job pinging the service to keep it warm — free instance hours are finite, and defeating the
+idling would be pretending the constraint is not there.
+
+`DATABASE_URL` and `HTTP_USER_AGENT` are set in the Render dashboard and are never in this
+repository.
+
+## Automation
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| [`ci.yml`](.github/workflows/ci.yml) | push, PR | ruff, `mypy --strict`, pytest against a real PostgreSQL service container, and `alembic check` to prove the models have not drifted from the migrations |
+| [`ingest.yml`](.github/workflows/ingest.yml) | daily cron + manual | migrate, seed, reconcile a 14-day window |
+
+The ingestion workflow pairs `schedule:` with `workflow_dispatch:` because a GitHub cron has
+no timing SLA, is dropped under load, and is disabled outright after 60 days without a
+commit. A run reconciles a window rather than a day, so a missed firing costs nothing.
+
+It treats exit code 2 — *partial*, some files landed and some were quarantined — as a
+success with a note, not a failed job. A source that publishes dead links produces that
+outcome routinely, and a red X every morning trains everyone to ignore red X's. A real
+failure still fails.
+
+The raw source cache is restored from `actions/cache` between runs so rule 3 holds across
+ephemeral runners. That is a stopgap: Actions caches are evicted after 7 days without a read.
+PLANNING.md names Cloudflare R2 as the durable home.
 
 ## Development
 
