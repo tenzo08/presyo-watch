@@ -1,0 +1,40 @@
+# --- Secrets ---
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# --- Node / Next.js ---
+node_modules/
+.next/
+out/
+.vercel/
+
+# --- Project-specific: never commit the raw source cache ---
+data/cache/
+data/*.db
+*.sqlite3
+
+# --- Claude Code local settings (keep out of shared repo) ---
+.claude/settings.local.json
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
