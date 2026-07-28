@@ -60,10 +60,18 @@ export default function Dashboard() {
       .movers({ window_days: 30, limit: 1 }, controller.signal)
       .then(async (page) => {
         const top = page.items[0];
-        if (top) setCommodity(await api.commodity(top.commodity_slug, controller.signal));
+        if (top) {
+          setCommodity(await api.commodity(top.commodity_slug, controller.signal));
+        } else {
+          // Nothing to select, because nothing has been ingested. Without this the chart
+          // waits on a commodity that is never coming and shows a loading skeleton for
+          // ever — a database with no rows in it looked exactly like a slow request.
+          setSeries({ state: "ready", data: [] });
+        }
       })
-      .catch(() => {
-        /* Both panels surface their own failures; a missing default is not worth a third. */
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setSeries({ state: "failed", error: error as Error });
       });
     return () => controller.abort();
   }, [commodity, attempt]);
@@ -165,8 +173,10 @@ export default function Dashboard() {
           <Failed error={series.error as ApiError} onRetry={retry} />
         ) : series.data.length === 0 ? (
           <Empty>
-            No monitoring was published for this commodity in the last {rangeDays} days. Try a
-            longer range, or another commodity — coverage varies a lot by market.
+            {commodity
+              ? `No monitoring was published for this commodity in the last ${rangeDays} days.
+                 Try a longer range, or another commodity — coverage varies a lot by market.`
+              : "The API is running but has no observations in it yet, so there is nothing to chart. That means no ingestion run has completed successfully."}
           </Empty>
         ) : showTable ? (
           <PriceTable observations={series.data} />
