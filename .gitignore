@@ -30,6 +30,9 @@ data/cache/
 data/*.db
 *.sqlite3
 
+# Throwaway Postgres data directory created by scripts/with_temp_postgres.py
+.pgdata/
+
 # --- Claude Code local settings (keep out of shared repo) ---
 .claude/settings.local.json
 

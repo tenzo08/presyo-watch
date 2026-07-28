@@ -18,7 +18,7 @@ localhost one.
       that returns cached bytes if the file has been seen
 - [x] HTTP client: descriptive User-Agent + contact email, 1 req/sec/host limit,
       exponential backoff with jitter, explicit timeout
-- [ ] Postgres schema + migrations (Alembic) per PLANNING.md
+- [x] Postgres schema + migrations (Alembic) per PLANNING.md
 - [ ] Index scraper for one regional DA source: extract anchor hrefs, tolerant date
       parsing from link text with filename fallback, quarantine unparseable entries
 - [ ] `pdfplumber` parser producing validated Pydantic rows; group labels from positional
@@ -106,3 +106,11 @@ _(append new tasks here as they surface — do not silently expand scope in othe
 - [ ] **Decide how `CacheConflictError` is handled by the ingester.** The cache refuses to
       overwrite a known URL whose bytes changed, which is the right default, but a run that
       hits it currently just fails. It should probably quarantine and continue.
+- [x] **`scripts/with_temp_postgres.py`** — runs a command against a throwaway Postgres via
+      the `pgserver` wheel, so schema work needs neither Neon nor Docker. Used to verify the
+      migration applies, reverses, and does not drift from the models.
+- [ ] **Seed data for `sources`, `regions`, and `commodities`.** The schema exists but is
+      empty; the ingester cannot write an observation until Caraga has a `sources` row and
+      its markets have `regions` rows. Probably an Alembic data migration or a seed command.
+- [ ] **Wire `PRESYOWATCH_TEST_DATABASE_URL` into CI** (Phase 2) so `tests/db` stops being
+      skipped there. Locally it runs via the helper script above.

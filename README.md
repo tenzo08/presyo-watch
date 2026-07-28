@@ -22,6 +22,25 @@ uv run mypy                    # type check (strict, per pyproject.toml)
 uv run pytest                  # tests
 ```
 
+### Database
+
+Migrations are Alembic and take their target from `DATABASE_URL` — no connection string is
+committed. Schema tests are skipped unless `PRESYOWATCH_TEST_DATABASE_URL` is set.
+
+Neither Neon nor Docker is needed to work on the schema. `pgserver` ships real PostgreSQL
+binaries as a wheel, so a disposable server can be started on Linux, macOS, or Windows:
+
+```bash
+# Apply the migration, confirm the models have not drifted from it, run the schema tests,
+# and prove the migration reverses.
+uv run --with pgserver python scripts/with_temp_postgres.py \
+    alembic upgrade head -- alembic check -- pytest tests/db -q -- alembic downgrade base
+```
+
+`alembic check` is the important one: it fails if the models and the migration disagree.
+The schema tests build their database by *running the migration* rather than by
+`metadata.create_all`, so they assert against the schema that actually ships.
+
 ## Documentation
 
 | File | Contents |
