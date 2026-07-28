@@ -11,7 +11,6 @@ the dependency set can do.
 """
 
 from decimal import Decimal
-from functools import cache
 from pathlib import Path
 
 import pytest
@@ -29,6 +28,7 @@ from presyowatch.sources.bantay_presyo import (
     normalise_unit,
     parse_sheet,
 )
+from tests.conftest import load_sheet
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "pdf"
 
@@ -50,15 +50,9 @@ HEADER_ROW: tuple[str | None, ...] = (
 )
 
 
-@cache
 def load(name: str) -> ParsedSheet:
-    """Parse a fixture, once per session.
-
-    Parsing three pages of ruled table takes a few seconds, and these tests are run by the
-    pre-commit hook on every commit. Cached because ``ParsedSheet`` is frozen, so no test
-    can contaminate another through it.
-    """
-    return parse_sheet((FIXTURES / name).read_bytes())
+    """Parse a fixture sheet. Cached in ``conftest`` so every module shares one parse."""
+    return load_sheet(name)
 
 
 @pytest.fixture(scope="module")

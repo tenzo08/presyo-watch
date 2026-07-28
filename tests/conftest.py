@@ -8,9 +8,12 @@ that way — ``www.da.gov.ph`` really does serve CRLF.
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from functools import cache
 from pathlib import Path
 
 import pytest
+
+from presyowatch.sources.bantay_presyo import ParsedSheet, parse_sheet
 
 FIXTURES = Path(__file__).parent / "fixtures"
 ROBOTS_FIXTURES = FIXTURES / "robots"
@@ -60,3 +63,26 @@ class FakeClock:
 @pytest.fixture
 def clock() -> FakeClock:
     return FakeClock()
+
+
+PDF_FIXTURES = FIXTURES / "pdf"
+
+SHEET_NAMES = (
+    "Cabadbaran-City-Public-Market_June-24-2026.pdf",
+    "Luha-Public-Market.xlsx-July-28-2026.pdf",
+    "Mayor-Salvador-Calo-July-19-2029.pdf",
+    "San-Jose-Public-Market_July-28-2026.pdf",
+)
+"""The committed monitoring sheets: four markets, four provinces, one with a typo'd
+filename year and one whose table has a collapsed row."""
+
+
+@cache
+def load_sheet(name: str) -> ParsedSheet:
+    """Parse a fixture sheet, once per session.
+
+    Shared by every test module rather than cached per module: parsing three ruled pages
+    takes a second or so, and the pre-commit hook runs the whole suite on every commit.
+    Safe to share because ``ParsedSheet`` is frozen.
+    """
+    return parse_sheet((PDF_FIXTURES / name).read_bytes())

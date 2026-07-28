@@ -23,7 +23,7 @@ localhost one.
       parsing from link text with filename fallback, quarantine unparseable entries
 - [x] `pdfplumber` parser producing validated Pydantic rows; group labels from positional
       extraction, blanks as NULL + `unavailable` flag, unit normalization
-- [ ] Commodity alias table + resolver; unmapped names quarantined, never guessed
+- [x] Commodity alias table + resolver; unmapped names quarantined, never guessed
 - [ ] Idempotent upsert on the natural key; `Revised-` files update in place and append to
       `observation_revisions`
 - [ ] Backfill runner over a date range; `ingestion_runs` row per source per run
@@ -123,6 +123,20 @@ _(append new tasks here as they surface — do not silently expand scope in othe
       and pesticides so a food chart can exclude them, but `price_observations` has no column
       for it. Either derive it from `commodities.group` at query time or add a column —
       decide before the API filters on it.
+- [ ] **Curate the 20 unseeded commodity triples.** The seed covers the 149 triples attested
+      by 3+ of the 4 fixture sheets, giving 96.4% row resolution. The remaining 20 are almost
+      all extraction artefacts of triples already seeded — `'pcs/kg) Male, Medium (12-14'` for
+      `'Male, Medium (12-14 pcs/kg)'`, `'Habichuelas/Baguio Beans,'` truncated mid-name — and
+      each needs a human to add an alias row pointing at the existing canonical commodity.
+      They quarantine at stage `alias` until then, which is the intended behaviour.
+      `Banana (Cardava)` is the one genuine judgement call: it is another name for
+      `Banana (Saba)`, so it is a synonym rather than a new commodity.
+- [ ] **Load the seed into the database.** `load_seed()` reads the committed CSVs and
+      `CommodityResolver.from_seed()` builds a resolver from them, but nothing writes
+      `commodities` or `commodity_aliases` rows yet. Belongs with the seed-data item above.
+- [ ] **Regenerate the seed once the fixture corpus grows.** The attestation threshold is
+      "more than half the sheets", so a corpus of ten will draw the line differently — and
+      better — than a corpus of four.
 - [ ] **Archive index snapshots.** The index page is deliberately not `fetch_once`d because it
       is mutable, so nothing keeps a copy of what the listing said on a given day. A
       content-addressed store keyed by hash alone — no URL index — would preserve the audit

@@ -1,0 +1,150 @@
+alias_key,canonical_slug
+corn | corn | white. grain,corn-corn-white-grain
+"corn | corn | yellow, grain",corn-corn-yellow-grain
+"corn | corn cracked | yellow, feed grade",corn-corn-cracked-yellow-feed-grade
+corn | corn grits | feed grade,corn-corn-grits-feed-grade
+"corn | corn grits | white, food grade",corn-corn-grits-white-food-grade
+"corn | corn grits | yellow, food grade",corn-corn-grits-yellow-food-grade
+fertilizer | ammonium phosphate (16-20-0) | ,fertilizer-ammonium-phosphate-16-20-0
+fertilizer | ammonium sulfate (21-0-0) | ,fertilizer-ammonium-sulfate-21-0-0
+fertilizer | complete (14-14-14) | ,fertilizer-complete-14-14-14
+fertilizer | diammophos (18-46-0) | ,fertilizer-diammophos-18-46-0
+fertilizer | muriate of potash (0-0-60) | ,fertilizer-muriate-of-potash-0-0-60
+fertilizer | urea (46-0-0) | ,fertilizer-urea-46-0-0
+fish | alumahan (indian mackerel) | medium (4-6 pcs/kg),fish-alumahan-indian-mackerel-medium-4-6-pcs-kg
+"fish | bangus, large | large (1-2 pcs)",fish-bangus-large-large-1-2-pcs
+"fish | bangus, medium | medium (3-4 pcs/kg)",fish-bangus-medium-medium-3-4-pcs-kg
+fish | bonito (frigate tuna) | ,fish-bonito-frigate-tuna
+"fish | galunggong, imported | male, medium (12-14 pcs/kg)",fish-galunggong-imported-male-medium-12-14-pcs-kg
+"fish | galunggong, local | male, medium (12-14 pcs/kg)",fish-galunggong-local-male-medium-12-14-pcs-kg
+"fish | salmon head, imported | ",fish-salmon-head-imported
+"fish | salmon head, local | ",fish-salmon-head-local
+fish | sardines (tamban) | ,fish-sardines-tamban
+"fish | squid (pusit bisaya), local | medium",fish-squid-pusit-bisaya-local-medium
+"fish | tambakol (yellow-fin tuna), local | medium, fresh or chilled",fish-tambakol-yellow-fin-tuna-local-medium-fresh-or-chilled
+fish | tilapia | medium (5-6 pcs/kg),fish-tilapia-medium-5-6-pcs-kg
+fruits | avocado | ,fruits-avocado
+fruits | banana (lakatan) | 8-10 pcs/kg,fruits-banana-lakatan-8-10-pcs-kg
+fruits | banana (latundan) | 10-12 pcs/kg,fruits-banana-latundan-10-12-pcs-kg
+fruits | banana (saba) | ,fruits-banana-saba
+fruits | calamansi | ,fruits-calamansi
+"fruits | mango (carabao) | ripe, 3-4 pcs/kg",fruits-mango-carabao-ripe-3-4-pcs-kg
+fruits | melon | ,fruits-melon
+"fruits | papaya | solo, ripe, 2-3 pcs/kg",fruits-papaya-solo-ripe-2-3-pcs-kg
+fruits | pomelo | ,fruits-pomelo
+fruits | watermelon | ,fruits-watermelon
+fungicide | antracol | ,fungicide-antracol
+fungicide | dithane | ,fungicide-dithane
+fungicide | fungitox | ,fungicide-fungitox
+herbicide | kocide | ,herbicide-kocide
+"highland vegetables | bell pepper (green), local | medium (151- 250gm/pc)",highland-vegetables-bell-pepper-green-local-medium-151-250gm-pc
+"highland vegetables | bell pepper (red), local | medium (151- 250gm/pc)",highland-vegetables-bell-pepper-red-local-medium-151-250gm-pc
+highland vegetables | bottle gourd (upo) | ,highland-vegetables-bottle-gourd-upo
+"highland vegetables | broccoli, local | medium (8-10 cm diameter/bunch hd)",highland-vegetables-broccoli-local-medium-8-10-cm-diameter-bunch-hd
+highland vegetables | cabbage (rare ball) | 510 gm - 1 kg/head,highland-vegetables-cabbage-rare-ball-510-gm-1-kg-head
+highland vegetables | cabbage (scorpio) | 750 gm - 1 kg/head,highland-vegetables-cabbage-scorpio-750-gm-1-kg-head
+highland vegetables | cabbage (wonder ball) | 510 gm - 1 kg/head,highland-vegetables-cabbage-wonder-ball-510-gm-1-kg-head
+"highland vegetables | carrots, local | 8-10 pcs/kg",highland-vegetables-carrots-local-8-10-pcs-kg
+"highland vegetables | cauliflower, local | medium (8-10 cm diameter/bunch hd)",highland-vegetables-cauliflower-local-medium-8-10-cm-diameter-bunch-hd
+highland vegetables | celery | medium (501-800 g),highland-vegetables-celery-medium-501-800-g
+highland vegetables | chayote | medium (301-400 g),highland-vegetables-chayote-medium-301-400-g
+highland vegetables | cucumber | ,highland-vegetables-cucumber
+highland vegetables | lettuce (green ice) | ,highland-vegetables-lettuce-green-ice
+highland vegetables | lettuce (romaine) | ,highland-vegetables-lettuce-romaine
+highland vegetables | okra | ,highland-vegetables-okra
+highland vegetables | pechay baguio | ,highland-vegetables-pechay-baguio
+"highland vegetables | white potato, local | 10-12 pcs/kg",highland-vegetables-white-potato-local-10-12-pcs-kg
+imported commercial rice | basmati | ,imported-commercial-rice-basmati
+imported commercial rice | glutinous | white,imported-commercial-rice-glutinous-white
+imported commercial rice | japonica/jasponica | ,imported-commercial-rice-japonica-jasponica
+imported commercial rice | other special rice | white rice,imported-commercial-rice-other-special-rice-white-rice
+imported commercial rice | premium | 5% broken,imported-commercial-rice-premium-5-broken
+imported commercial rice | regular milled | 20-40% bran streak,imported-commercial-rice-regular-milled-20-40-bran-streak
+imported commercial rice | well milled | 1-19% bran streak,imported-commercial-rice-well-milled-1-19-bran-streak
+insecticide | arrow | ,insecticide-arrow
+insecticide | brodan | ,insecticide-brodan
+insecticide | bull's eye | ,insecticide-bull-s-eye
+insecticide | cymbush | ,insecticide-cymbush
+insecticide | vindex plus | ,insecticide-vindex-plus
+legumes | mungbean | ,legumes-mungbean
+livestock & poultry feeds | chick booster | ,livestock-poultry-feeds-chick-booster
+livestock & poultry feeds | chick grower | ,livestock-poultry-feeds-chick-grower
+livestock & poultry feeds | chick pre-starter | ,livestock-poultry-feeds-chick-pre-starter
+livestock & poultry feeds | chick starter | ,livestock-poultry-feeds-chick-starter
+livestock & poultry feeds | crack corn | ,livestock-poultry-feeds-crack-corn
+livestock & poultry feeds | gestating | ,livestock-poultry-feeds-gestating
+livestock & poultry feeds | hog booster | ,livestock-poultry-feeds-hog-booster
+livestock & poultry feeds | hog finisher | ,livestock-poultry-feeds-hog-finisher
+livestock & poultry feeds | hog grower | ,livestock-poultry-feeds-hog-grower
+livestock & poultry feeds | hog pre-starter | ,livestock-poultry-feeds-hog-pre-starter
+livestock & poultry feeds | hog starter | ,livestock-poultry-feeds-hog-starter
+livestock & poultry feeds | lactating | ,livestock-poultry-feeds-lactating
+livestock & poultry feeds | layer mash | ,livestock-poultry-feeds-layer-mash
+livestock meat products | beef brisket | meat w/ bones,livestock-meat-products-beef-brisket-meat-w-bones
+livestock meat products | beef rump | lean meat/tapadera,livestock-meat-products-beef-rump-lean-meat-tapadera
+livestock meat products | frozen | kasim,livestock-meat-products-frozen-kasim
+livestock meat products | frozen | liempo,livestock-meat-products-frozen-liempo
+livestock meat products | pork belly (liempo) | liempo,livestock-meat-products-pork-belly-liempo-liempo
+livestock meat products | pork ham (kasim) | lean meat/tapadera,livestock-meat-products-pork-ham-kasim-lean-meat-tapadera
+livestock meat products | pork pata (hind) | ,livestock-meat-products-pork-pata-hind
+livestock meat products | pork ribs | ,livestock-meat-products-pork-ribs
+livestock meat products | porkchop | ,livestock-meat-products-porkchop
+local commercial rice | basmati | ,local-commercial-rice-basmati
+local commercial rice | black rice | ,local-commercial-rice-black-rice
+local commercial rice | brown rice | ,local-commercial-rice-brown-rice
+local commercial rice | glutinous | tapol,local-commercial-rice-glutinous-tapol
+local commercial rice | japonica/jasponica | ,local-commercial-rice-japonica-jasponica
+local commercial rice | other special rice | white rice,local-commercial-rice-other-special-rice-white-rice
+local commercial rice | premium | 5% broken,local-commercial-rice-premium-5-broken
+local commercial rice | red rice | ,local-commercial-rice-red-rice
+local commercial rice | regular milled | 20-40% bran streak,local-commercial-rice-regular-milled-20-40-bran-streak
+local commercial rice | well milled | 1-19% bran streak,local-commercial-rice-well-milled-1-19-bran-streak
+lowland vegetables | ampalaya | 4-5 pcs/kg,lowland-vegetables-ampalaya-4-5-pcs-kg
+"lowland vegetables | chilli (green), local | haba/panigang",lowland-vegetables-chilli-green-local-haba-panigang
+lowland vegetables | eggplant | 3-4 small bundles,lowland-vegetables-eggplant-3-4-small-bundles
+lowland vegetables | native pechay | 3-4 small bundles,lowland-vegetables-native-pechay-3-4-small-bundles
+lowland vegetables | pole sitao | 3-4 small bundles,lowland-vegetables-pole-sitao-3-4-small-bundles
+lowland vegetables | squash | suprema variety,lowland-vegetables-squash-suprema-variety
+lowland vegetables | tomato | 15-18 pcs/kg,lowland-vegetables-tomato-15-18-pcs-kg
+molluscide | bayluscide | ,molluscide-bayluscide
+molluscide | maskada | ,molluscide-maskada
+molluscide | parakuhol | ,molluscide-parakuhol
+molluscide | primalex | ,molluscide-primalex
+molluscide | surekill | ,molluscide-surekill
+other basic commodities | cacao beans | ,other-basic-commodities-cacao-beans
+other basic commodities | cooking oil (coconut) | 1 liter/bottle,other-basic-commodities-cooking-oil-coconut-1-liter-bottle
+other basic commodities | cooking oil (coconut) | 350 ml/bottle,other-basic-commodities-cooking-oil-coconut-350-ml-bottle
+other basic commodities | cooking oil (palm) | 1 liter/bottle,other-basic-commodities-cooking-oil-palm-1-liter-bottle
+other basic commodities | cooking oil (palm) | 350 ml/bottle,other-basic-commodities-cooking-oil-palm-350-ml-bottle
+other basic commodities | soybeans (imported) | ,other-basic-commodities-soybeans-imported
+other basic commodities | soybeans (local) | ,other-basic-commodities-soybeans-local
+other basic commodities | sugar (brown) | ,other-basic-commodities-sugar-brown
+other basic commodities | sugar (refined) | ,other-basic-commodities-sugar-refined
+other basic commodities | sugar (washed) | ,other-basic-commodities-sugar-washed
+"poultry eggs | chicken egg | brown, extra large",poultry-eggs-chicken-egg-brown-extra-large
+"poultry eggs | chicken egg | brown, large",poultry-eggs-chicken-egg-brown-large
+"poultry eggs | chicken egg | brown, medium",poultry-eggs-chicken-egg-brown-medium
+"poultry eggs | chicken egg | white, extra large",poultry-eggs-chicken-egg-white-extra-large
+"poultry eggs | chicken egg | white, extra small",poultry-eggs-chicken-egg-white-extra-small
+"poultry eggs | chicken egg | white, jumbo",poultry-eggs-chicken-egg-white-jumbo
+"poultry eggs | chicken egg | white, large",poultry-eggs-chicken-egg-white-large
+"poultry eggs | chicken egg | white, medium",poultry-eggs-chicken-egg-white-medium
+"poultry eggs | chicken egg | white, pewee",poultry-eggs-chicken-egg-white-pewee
+"poultry eggs | chicken egg | white, small",poultry-eggs-chicken-egg-white-small
+poultry meat products | chicken breast | ,poultry-meat-products-chicken-breast
+poultry meat products | chicken drumstick | ,poultry-meat-products-chicken-drumstick
+poultry meat products | chicken thigh | ,poultry-meat-products-chicken-thigh
+poultry meat products | chicken wings | ,poultry-meat-products-chicken-wings
+poultry meat products | whole chicken | fully dressed,poultry-meat-products-whole-chicken-fully-dressed
+rodenticide | zinc phosphide | ,rodenticide-zinc-phosphide
+rootcrops | cassava | ,rootcrops-cassava
+rootcrops | sweet potato | ,rootcrops-sweet-potato
+"spices | chilli (red), local | tingala",spices-chilli-red-local-tingala
+"spices | garlic, imported | ",spices-garlic-imported
+"spices | garlic, native/local | ",spices-garlic-native-local
+"spices | ginger, local | fairly well-matured, medium (150-300 gm)",spices-ginger-local-fairly-well-matured-medium-150-300-gm
+"spices | red onion, imported | ",spices-red-onion-imported
+"spices | red onion, local | 13-15 pcs/kg",spices-red-onion-local-13-15-pcs-kg
+spices | sweet pepper | ,spices-sweet-pepper
+"spices | white onion, imported | ",spices-white-onion-imported
+"spices | white onion, local | ",spices-white-onion-local
