@@ -21,7 +21,7 @@ localhost one.
 - [x] Postgres schema + migrations (Alembic) per PLANNING.md
 - [x] Index scraper for one regional DA source: extract anchor hrefs, tolerant date
       parsing from link text with filename fallback, quarantine unparseable entries
-- [ ] `pdfplumber` parser producing validated Pydantic rows; group labels from positional
+- [x] `pdfplumber` parser producing validated Pydantic rows; group labels from positional
       extraction, blanks as NULL + `unavailable` flag, unit normalization
 - [ ] Commodity alias table + resolver; unmapped names quarantined, never guessed
 - [ ] Idempotent upsert on the natural key; `Revised-` files update in place and append to
@@ -106,8 +106,23 @@ _(append new tasks here as they surface — do not silently expand scope in othe
       `FY####` directory and that contradicts the filename 12.6% of the time. The likely
       answer is the page's own grouping — the links sit under year/month headings — which
       means passing surrounding page context into the scraper, not just the anchor.
-- [ ] **Have the ingester pass `not_after=today` to `scrape_index`.** The bound exists and is
-      tested but defaults to off, so nothing currently stops the source's 2029-dated typo.
+- [ ] ~~**Have the ingester pass `not_after=today` to `scrape_index`.**~~ **Superseded — do
+      not do this.** The 2029-dated file contains `Date of Monitoring : July 19, 2026`, so
+      the filename year is the typo and the PDF header is correct. Quarantining on the
+      filename date would have thrown away a valid sheet. Instead: keep any `not_after`
+      bound generous, and reconcile the index date against the parsed header date *after*
+      fetching. A disagreement is worth recording, not worth discarding the file over.
+- [ ] **Decide what to do when the index date and the sheet header date disagree.** The
+      parser trusts the header. The mismatch is a real signal (a mislabelled file) and should
+      probably be logged or counted on the data quality page rather than ignored.
+- [ ] **Normalise province and market names before populating `regions`/`markets`.** The
+      sheets write `Agusan del Norte` and `Agusan Del Norte` for the same province, and
+      `Province of Dinagat Islands` for another. Matching on the raw string would create
+      duplicate regions.
+- [ ] **Give `is_agricultural_input` somewhere to live.** The parser flags feeds, fertiliser
+      and pesticides so a food chart can exclude them, but `price_observations` has no column
+      for it. Either derive it from `commodities.group` at query time or add a column —
+      decide before the API filters on it.
 - [ ] **Archive index snapshots.** The index page is deliberately not `fetch_once`d because it
       is mutable, so nothing keeps a copy of what the listing said on a given day. A
       content-addressed store keyed by hash alone — no URL index — would preserve the audit

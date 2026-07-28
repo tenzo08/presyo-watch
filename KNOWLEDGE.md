@@ -102,6 +102,59 @@ Premium 5% Broken kg 52.00 53.00 53.00 52.80
 
 Use `pdfplumber`. **No OCR required.** Do not add tesseract to the stack.
 
+### They are *ruled* tables, and that solves the group-label problem
+
+Verified 2026-07-28 across four sheets from four markets, all committed under
+`tests/fixtures/pdf/`.
+
+`page.find_tables()` reconstructs the grid from the ruling lines and gives an 8-column
+table: `Commodity Group | Commodities | Specifications | Unit | LOW | HIGH | PREVAILING |
+AVERAGE`. Two facts make this far better than clustering words by y-coordinate:
+
+- A group label is **one tall cell** spanning its block, and `extract()` places it in the
+  **first** row of that span. Group assignment is a forward fill.
+- Continuation rows return **`None`** for the group column, whereas a genuinely empty cell
+  returns **`""`**. That distinction is load-bearing: `None` means "same group as above",
+  `""` in a price column means "not monitored".
+
+Anatomy of a sheet: 3–4 pages, ~153 data rows, **21 commodity groups**. The header block
+and the column header appear on page 1 only, so pages 2+ are pure data and a group span can
+continue across a page boundary. The "blank means not available" note is itself a row of
+the table and must be skipped.
+
+### The sheet's own date beats the filename
+
+`Mayor-Salvador-Calo-July-19-2029.pdf` contains `Date of Monitoring : July 19, 2026`.
+
+The filename year is a typo; the header is correct. **Therefore the PDF header is the
+observation date, and the index scraper's date is provisional** — good only for deciding
+what to fetch and for spotting files worth a second look.
+
+This corrects an earlier plan to quarantine future-dated files at index stage: doing so
+would have discarded this perfectly valid 2026 sheet. Any `not_after` bound on the scraper
+must be generous, and the filename/header disagreement should be reconciled *after*
+parsing.
+
+### Further extraction quirks, all observed
+
+- **Thousands separators**: feed and fertiliser prices are written `1,791.00`. Strip commas.
+- **Collapsed rows**: in the Cabadbaran sheet one cell contains three stacked values,
+  `1,865.00\n1,805.00\n40.00`. There is no way to know which belongs to the commodity, so
+  the row is quarantined. The collapse also robs the two rows below of their `LOW`, and that
+  damage is *not* detectable from our side — those rows look legitimately partial.
+- **Units observed**: `kg`, `g`/`gram`, `L`/`Liter`, `ml`, `pc`, `box`, `bag`. Casing and
+  pluralisation vary between sheets, so normalise.
+- **Province names vary in case and form**: `Agusan del Norte` and `Agusan Del Norte` both
+  appear, and Dinagat Islands is written `Province of Dinagat Islands`. This matters when
+  populating `regions` and `markets` — match on a normalised key, not the raw string.
+- **The non-food tail is a deliberate keep-and-flag.** `LIVESTOCK & POULTRY FEEDS`,
+  `FERTILIZER`, `INSECTICIDE`, `HERBICIDE`, `FUNGICIDE`, `MOLLUSCIDE`, `RODENTICIDE` —
+  about 35 rows a sheet. They are parsed (dropping published data silently is not
+  acceptable) and flagged, so a food-price chart can exclude them rather than quietly
+  averaging fungicide into the cost of rice.
+- **Blanks are frequent, not exceptional**: 55–75 of ~153 rows per sheet are unmonitored.
+  Any "coverage" figure on the data quality page has to expect that.
+
 ### Known extraction quirks
 - Commodity **group** labels (`IMPORTED COMMERCIAL RICE`, `HIGHLAND VEGETABLES`,
   `SPICES`, `FERTILIZER`, …) appear *out of order*, often collected at the end of a
