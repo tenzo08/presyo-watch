@@ -68,6 +68,19 @@ export interface Observation {
   ingested_at: string;
 }
 
+export interface Region {
+  psgc_code: string;
+  name: string;
+  level: string;
+}
+
+export interface Market {
+  id: number;
+  name: string;
+  municipality: string;
+  region_psgc_code: string;
+}
+
 export interface Mover {
   commodity_slug: string;
   commodity: string;
@@ -199,8 +212,15 @@ export const api = {
     signal?: AbortSignal,
   ) => get<Page<Observation>>("/observations", params, signal),
 
-  movers: (params: { window_days?: number; limit?: number }, signal?: AbortSignal) =>
-    get<Page<Mover>>("/movers", params, signal),
+  movers: (
+    params: { window_days?: number; limit?: number; region?: string },
+    signal?: AbortSignal,
+  ) => get<Page<Mover>>("/movers", params, signal),
+
+  regions: (signal?: AbortSignal) => get<Region[]>("/regions", {}, signal),
+
+  markets: (params: { region?: string; limit?: number }, signal?: AbortSignal) =>
+    get<Page<Market>>("/markets", params, signal),
 
   sources: (signal?: AbortSignal) => get<Source[]>("/meta/sources", {}, signal),
 

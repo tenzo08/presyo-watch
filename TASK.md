@@ -63,7 +63,12 @@ localhost one.
 - [x] Time series chart with region/market comparison — one line per market, up to six,
       colours from a palette validated for colour-blindness by script in both modes
 - [x] "Biggest movers" table over a selectable window — backed by a new `/movers` endpoint
-- [x] Commodity search — debounced, server-side, with superseded requests aborted
+- [x] Commodity search — plus a browsable list of the whole vocabulary, grouped as the
+      source groups it. Search alone assumed a reader already knows what is published, and
+      `Habichuelas`, `Galunggong` and `Alumahan` are hard to search for unseen.
+- [x] Region filter on the chart and the movers table. Only provinces with a monitored
+      market are offered: the seed also holds the Caraga *region* row, markets hang off
+      provinces, and an option that can only return nothing is a trap.
 - [x] Proper loading skeletons and error states — assume the API is cold and slow
       — skeletons show the shape of what is coming, and a timeout is distinguished from a
       500, because "still waking up" and "broken" deserve different reactions
@@ -276,3 +281,12 @@ _(append new tasks here as they surface — do not silently expand scope in othe
       the local median, because without the floor a two-peso move against a tight cluster
       scored 6.4 deviations and would have flooded the page. Ten percent was reasoned about,
       not fitted. Once there is a year of data, check what it actually admits and rejects.
+- [ ] **A province with no data in the window still appears in the picker.** Options are
+      derived from markets that exist, which correctly excludes the region row — but a
+      province whose markets published nothing in the selected range still offers itself and
+      then shows an empty chart. Deriving from observations in range instead would fix it and
+      would mean refetching the options whenever the range changes; probably worth it.
+- [ ] **The commodity list is fetched whole and filtered in the browser.** 150 rows today,
+      and the instant filtering is worth far more than the transfer. It stops being the right
+      trade somewhere around a few thousand, at which point `/commodities?q=` is already there
+      to go back to.

@@ -15,7 +15,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { CommoditySearch } from "@/components/CommoditySearch";
+import { CommodityPicker } from "@/components/CommodityPicker";
+import { RegionPicker, useRegionOptions } from "@/components/RegionPicker";
 import { Footer } from "@/components/Footer";
 import { MoversTable } from "@/components/MoversTable";
 import { PriceChart, PriceTable } from "@/components/PriceChart";
@@ -39,9 +40,11 @@ type Load<T> = { state: "loading" } | { state: "ready"; data: T } | { state: "fa
 export default function Dashboard() {
   const [commodity, setCommodity] = useState<Commodity | null>(null);
   const [rangeDays, setRangeDays] = useState<number>(90);
+  const [region, setRegion] = useState<string | null>(null);
   const [moverDays, setMoverDays] = useState<number>(7);
   const [showTable, setShowTable] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const regionOptions = useRegionOptions();
 
   const [series, setSeries] = useState<Load<Observation[]>>({ state: "loading" });
   const [movers, setMovers] = useState<Load<Mover[]>>({ state: "loading" });
@@ -83,7 +86,12 @@ export default function Dashboard() {
     setSeries({ state: "loading" });
     api
       .observations(
-        { commodity: commodity.canonical_slug, date_from: daysAgo(rangeDays), limit: 500 },
+        {
+          commodity: commodity.canonical_slug,
+          date_from: daysAgo(rangeDays),
+          region: region ?? undefined,
+          limit: 500,
+        },
         controller.signal,
       )
       .then((page) => setSeries({ state: "ready", data: page.items }))
@@ -92,20 +100,20 @@ export default function Dashboard() {
         setSeries({ state: "failed", error: error as Error });
       });
     return () => controller.abort();
-  }, [commodity, rangeDays, attempt]);
+  }, [commodity, rangeDays, region, attempt]);
 
   useEffect(() => {
     const controller = new AbortController();
     setMovers({ state: "loading" });
     api
-      .movers({ window_days: moverDays, limit: 12 }, controller.signal)
+      .movers({ window_days: moverDays, region: region ?? undefined, limit: 12 }, controller.signal)
       .then((page) => setMovers({ state: "ready", data: page.items }))
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
         setMovers({ state: "failed", error: error as Error });
       });
     return () => controller.abort();
-  }, [moverDays, attempt]);
+  }, [moverDays, region, attempt]);
 
   const retry = useCallback(() => setAttempt((count) => count + 1), []);
 
@@ -157,7 +165,8 @@ export default function Dashboard() {
         </header>
 
         <div className="controls">
-          <CommoditySearch onSelect={setCommodity} selected={commodity} />
+          <CommodityPicker onSelect={setCommodity} selected={commodity} />
+          <RegionPicker options={regionOptions} value={region} onChange={setRegion} />
         </div>
 
         {commodity ? (
@@ -208,6 +217,9 @@ export default function Dashboard() {
           first and last days actually monitored inside the window — the source does not
           publish every day. A rise is shown in red because for a shopper that is the bad
           direction.
+          {region
+            ? ` Showing ${regionOptions.find((option) => option.psgc_code === region)?.name ?? "one province"} only.`
+            : ""}
         </p>
 
         {movers.state === "loading" ? (
