@@ -6,6 +6,7 @@ different secrets.
 """
 
 import os
+import pathlib
 from logging.config import fileConfig
 
 from alembic import context
@@ -22,20 +23,47 @@ target_metadata = Base.metadata
 
 
 def _database_url() -> str:
-    """Return the URL to migrate, from the environment.
+    """Return the URL to migrate: the real environment first, then ``.env``.
+
+    The environment wins, so a deployment or a CI job that exports ``DATABASE_URL`` is never
+    quietly overridden by a stray file. ``.env`` is consulted only as a fallback, because the
+    README tells a developer to create one and it was then the one command that ignored it —
+    ``alembic upgrade head`` failed with "DATABASE_URL is not set" while the application
+    running beside it read the same file happily.
 
     Raises:
-        RuntimeError: If ``DATABASE_URL`` is unset. Failing here is much kinder than
-            connecting to whatever a default might have pointed at.
+        RuntimeError: If neither supplies it. Failing here is much kinder than connecting to
+            whatever a default might have pointed at.
     """
-    url = os.environ.get("DATABASE_URL")
+    url = os.environ.get("DATABASE_URL") or _from_dotenv("DATABASE_URL")
     if not url:
         msg = (
-            "DATABASE_URL is not set. Alembic takes the target database from the "
-            "environment; see .env.example."
+            "DATABASE_URL is not set, in the environment or in .env. Alembic takes the "
+            "target database from there; see .env.example."
         )
         raise RuntimeError(msg)
     return url
+
+
+def _from_dotenv(key: str) -> str | None:
+    """Read one value from the repository's ``.env``, if there is one.
+
+    A deliberately small reader rather than a dependency: this needs to handle
+    ``KEY=value``, optional quotes and comments, and nothing else. ``pydantic-settings``
+    does the real job for the application, but importing the app's settings here would make
+    a migration depend on the code it is migrating for.
+    """
+    env_file = pathlib.Path(__file__).resolve().parent.parent / ".env"
+    if not env_file.is_file():
+        return None
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        name, _, value = stripped.partition("=")
+        if name.strip() == key:
+            return value.strip().strip('"').strip("'") or None
+    return None
 
 
 def run_migrations_offline() -> None:
